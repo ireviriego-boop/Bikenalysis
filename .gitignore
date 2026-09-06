@@ -1,0 +1,5 @@
+.env
+tokens.json
+state.json
+fit_files/
+__pycache__/
