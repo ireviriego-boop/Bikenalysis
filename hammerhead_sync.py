@@ -25,10 +25,14 @@ import webbrowser
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ENV_FILE = HERE / ".env"
-TOKENS_FILE = HERE / "tokens.json"
-STATE_FILE = HERE / "state.json"
-FIT_DIR = HERE / "fit_files"
+# BIKENALYSIS_ROOT la fija app.py cuando corre empaquetado como .exe, para que
+# .env/tokens/state/fit_files vivan junto al ejecutable y no en la carpeta
+# temporal donde PyInstaller descomprime el codigo.
+ROOT = Path(os.environ.get("BIKENALYSIS_ROOT", HERE))
+ENV_FILE = ROOT / ".env"
+TOKENS_FILE = ROOT / "tokens.json"
+STATE_FILE = ROOT / "state.json"
+FIT_DIR = Path(os.environ.get("BIKENALYSIS_FIT_DIR", ROOT / "fit_files"))
 
 AUTH_BASE = "https://api.hammerhead.io/v1/auth"
 API_BASE = "https://api.hammerhead.io/v1/api"
@@ -192,7 +196,11 @@ def ensure_access_token(env):
 
 # ---------------------------------------------------------------- sync ----
 
-def cmd_sync(env, since=None):
+def cmd_sync(env, since=None, log=print):
+    """Descarga las actividades nuevas como FIT. Devuelve un resumen (dict) con
+    new_count/new_activities/fit_dir ademas de imprimir el progreso con `log`
+    (por defecto print(), pero la app web pasa una funcion que no toca stdout
+    del proceso del servidor)."""
     access_token = ensure_access_token(env)
     state = load_json(STATE_FILE, {"downloaded_ids": [], "last_sync": None})
     downloaded = set(state.get("downloaded_ids", []))
@@ -202,12 +210,20 @@ def cmd_sync(env, since=None):
 
     page = 1
     new_count = 0
+    new_activities = []
     newest_created_at = state.get("last_sync")
 
     while True:
         params = {"page": page, "perPage": 50}
         if start_date:
-            params["startDate"] = start_date
+            # La API solo acepta startDate=YYYY-MM-DD (lo dice su documentacion
+            # OpenAPI en https://api.hammerhead.io/v1/docs) -- last_sync se
+            # guarda como datetime ISO completo (viene tal cual del createdAt
+            # de la actividad, con hora/milisegundos) porque asi se puede
+            # comparar con precision para saber cual es "la mas reciente
+            # vista", pero hay que recortarlo a la fecha antes de mandarlo
+            # aqui o la API devuelve 400 bad_request.
+            params["startDate"] = start_date[:10]
         url = f"{API_BASE}/activities?{urllib.parse.urlencode(params)}"
         data = get_json(url, access_token)
 
@@ -220,7 +236,7 @@ def cmd_sync(env, since=None):
             if activity_id in downloaded:
                 continue
 
-            print(f"Descargando {item.get('name', activity_id)} ({created_at})...")
+            log(f"Descargando {item.get('name', activity_id)} ({created_at})...")
             fit_bytes = get_binary(f"{API_BASE}/activities/{activity_id}/file", access_token)
 
             safe_name = activity_id.replace("/", "_").replace(":", "_")
@@ -229,6 +245,12 @@ def cmd_sync(env, since=None):
 
             downloaded.add(activity_id)
             new_count += 1
+            new_activities.append({
+                "activity_id": activity_id,
+                "name": item.get("name", activity_id),
+                "created_at": created_at,
+                "fit_path": str(fit_path),
+            })
 
         if page >= data.get("totalPages", 1):
             break
@@ -239,7 +261,8 @@ def cmd_sync(env, since=None):
         state["last_sync"] = newest_created_at
     save_json(STATE_FILE, state)
 
-    print(f"Listo. {new_count} actividad(es) nueva(s) descargada(s) en {FIT_DIR}")
+    log(f"Listo. {new_count} actividad(es) nueva(s) descargada(s) en {FIT_DIR}")
+    return {"new_count": new_count, "new_activities": new_activities, "fit_dir": str(FIT_DIR)}
 
 
 def main():
@@ -248,6 +271,17 @@ def main():
     sub.add_parser("auth", help="Autoriza la app una vez con tu cuenta de Hammerhead")
     sync_parser = sub.add_parser("sync", help="Descarga las actividades nuevas como FIT")
     sync_parser.add_argument("--since", help="Fecha desde la que sincronizar, formato YYYY-MM-DD")
+
+    # La consola de Windows suele usar cp1252, que no puede representar
+    # cualquier caracter Unicode -- un nombre de actividad con emoji u otro
+    # caracter fuera de ese repertorio tira print() con UnicodeEncodeError a
+    # mitad de la sincronizacion (bug real visto con datos de Strava, mismo
+    # riesgo aqui aunque no se haya disparado todavia). No afecta al modo app
+    # (usa log_lines.append, no print), solo a la ejecucion por linea de comandos.
+    try:
+        sys.stdout.reconfigure(errors="replace")
+    except Exception:
+        pass
 
     args = parser.parse_args()
     env = load_env()

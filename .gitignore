@@ -1,5 +1,16 @@
 .env
 tokens.json
 state.json
+strava_tokens.json
+strava_state.json
 fit_files/
 __pycache__/
+analysis/data/
+data/
+bikenalysis_error.log
+
+# Artefactos de la compilacion del .exe (ver build_exe.bat) -- se
+# regeneran con PyInstaller, no hace falta versionarlos.
+build/
+dist/
+*.spec
