@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bikenalysis</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <h1>🚵 Bikenalysis</h1>
+  <div class="topbar-right">
+    <span id="sync-status"></span>
+    <button id="sync-btn" class="sync-btn">🔄 Sincronizar</button>
+    <nav>
+      <button class="tab-btn active" data-view="rides">Actividades</button>
+      <button class="tab-btn" data-view="compare">Comparar</button>
+      <button class="tab-btn" data-view="fitness">📈 Forma</button>
+      <button class="tab-btn" data-view="settings">Ajustes</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- ===================== LISTA DE ACTIVIDADES ===================== -->
+  <section id="view-rides" class="view active">
+    <div id="rides-list-panel">
+      <label class="gear-filter-label">
+        Deporte:
+        <select id="type-filter">
+          <option value="all">Todas</option>
+        </select>
+      </label>
+      <table id="rides-table">
+        <thead>
+          <tr>
+            <th data-sort="start_ts">Fecha</th>
+            <th data-sort="distance_km">Dist. (km)</th>
+            <th data-sort="duration_s">Duración</th>
+            <th data-sort="avg_speed_kmh">Vel. media</th>
+            <th data-sort="avg_hr">FC media</th>
+            <th data-sort="elevation_gain_m">Desnivel+</th>
+            <th data-sort="sport_detail">Tipo</th>
+          </tr>
+        </thead>
+        <tbody id="rides-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== DETALLE DE UNA ACTIVIDAD ===================== -->
+  <section id="view-ride-detail" class="view">
+    <button id="back-to-rides" class="link-btn">← volver a actividades</button>
+    <h2 id="ride-detail-title"></h2>
+    <div id="ride-stats" class="stats-grid"></div>
+    <div id="ride-fatiga-context" class="fatiga-context"></div>
+    <div class="detail-grid">
+      <div id="ride-map" class="map"></div>
+      <div class="chart-panel">
+        <div id="chart-focus" class="chart-focus"></div>
+        <div class="chart-with-history">
+          <div class="chart-main">
+            <div class="chart-canvas-wrap">
+              <canvas id="ride-chart" width="600" height="220"></canvas>
+              <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+              <div id="chart-selection" class="chart-selection" hidden></div>
+            </div>
+            <div class="chart-select-hint">Arrastra sobre la gráfica para analizar un tramo elegido a mano.</div>
+            <div class="chart-legend"></div>
+          </div>
+          <div id="tramo-history" class="tramo-history" hidden></div>
+        </div>
+      </div>
+    </div>
+    <h3>Tramos interesantes (<span id="n-interesting">0</span>)</h3>
+    <div id="interesting-list"></div>
+  </section>
+
+  <!-- ===================== COMPARAR DOS ACTIVIDADES ===================== -->
+  <section id="view-compare" class="view">
+    <div class="compare-pickers">
+      <label>Actividad A
+        <select id="compare-a"></select>
+      </label>
+      <label>Actividad B
+        <select id="compare-b"></select>
+      </label>
+      <button id="compare-btn">Comparar</button>
+    </div>
+    <div id="compare-summary"></div>
+    <div id="compare-map" class="map"></div>
+    <div id="compare-segments"></div>
+  </section>
+
+  <!-- ===================== FITNESS / FATIGA / FORMA ===================== -->
+  <section id="view-fitness" class="view">
+    <h2>Forma</h2>
+    <div id="fitness-unconfigured" class="settings-intro" hidden>
+      Todavía no tienes tu pulso en reposo configurado -- hace falta para
+      calcular la carga de entrenamiento (TRIMP). Ve a
+      <button class="link-btn" id="fitness-goto-settings">Ajustes -&gt; Perfil físico</button>
+      para introducirlo.
+    </div>
+    <div id="fitness-content" hidden>
+      <div class="forma-explainer">
+        <p><strong class="term-fitness">Fitness</strong> es tu carga de fondo acumulada de las últimas ~6 semanas: sube con el entrenamiento constante, baja despacio si paras.</p>
+        <p><strong class="term-fatiga">Fatiga</strong> es la carga de los últimos ~7 días: sube y baja rápido.</p>
+        <p><strong class="term-forma">Forma</strong> = Fitness − Fatiga: positiva cuando vienes fresco (llevas menos carga reciente de la que tu Fitness puede absorber), negativa cuando vienes cansado (la carga reciente pesa más que tu base).</p>
+      </div>
+      <div class="forma-primary">
+        <div class="forma-value" id="forma-value">-</div>
+        <div class="forma-label" id="forma-label">-</div>
+      </div>
+      <div class="forma-recommendation" id="forma-recommendation"></div>
+      <div class="forma-detail" id="forma-detail">
+        <span>Fitness (carga de fondo, ~42 días): <strong id="detail-fitness">-</strong></span>
+        <span>Fatiga (carga reciente, ~7 días): <strong id="detail-fatiga">-</strong></span>
+      </div>
+      <div class="chart-canvas-wrap fitness-chart-wrap">
+        <canvas id="fitness-chart" width="800" height="220"></canvas>
+        <div id="fitness-chart-tooltip" class="chart-tooltip" hidden></div>
+      </div>
+      <div class="chart-legend">
+        <span class="legend fitness-fitness">fitness</span>
+        <span class="legend fitness-fatiga">fatiga</span>
+        <span class="legend fitness-forma">forma</span>
+      </div>
+      <h3>Últimos días y su efecto</h3>
+      <div id="fitness-recent-list" class="fitness-recent-list"></div>
+    </div>
+  </section>
+
+  <!-- ===================== AJUSTES ===================== -->
+  <section id="view-settings" class="view">
+    <h2>Ajustes</h2>
+
+    <h3>Perfil físico</h3>
+    <p class="settings-intro">
+      El pulso máximo se infiere solo del histórico de actividades, pero el
+      pulso en <strong>reposo real</strong> (medido en descanso, no el mínimo
+      visto en una salida) no se puede inferir de forma fiable -- hace falta
+      que lo introduzcas tú. Se usa para calcular la carga de entrenamiento
+      (TRIMP) y la gráfica de Forma. La altura normaliza la longitud de
+      zancada al correr (85 cm no es lo mismo en 1,90 m que en 1,60 m).
+    </p>
+    <div class="settings-form">
+      <label>
+        <span class="settings-label">Pulso en reposo</span>
+        <span class="settings-help">Medido nada más despertar, en descanso -- no durante ni justo después de una actividad.</span>
+        <div class="settings-input-row">
+          <input type="number" id="profile-resting-hr" step="1" min="30" max="100">
+          <span class="settings-unit">ppm</span>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Altura</span>
+        <div class="settings-input-row">
+          <input type="number" id="profile-height" step="1" min="120" max="230">
+          <span class="settings-unit">cm</span>
+        </div>
+      </label>
+    </div>
+    <button id="profile-save-btn" class="sync-btn">Guardar y recalcular</button>
+    <span id="profile-status"></span>
+
+    <h4>Peso</h4>
+    <p class="settings-intro">
+      A diferencia de la altura, el peso puede cambiar -- se guarda con
+      fecha (como las actividades) para poder usar el que tocaba en cada
+      momento, no solo el de hoy. Se usa para calcular vatios/kg en los
+      tramos de running con datos de potencia.
+    </p>
+    <div class="settings-form weight-form">
+      <label>
+        <span class="settings-label">Fecha</span>
+        <div class="settings-input-row">
+          <input type="date" id="weight-date">
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Peso</span>
+        <div class="settings-input-row">
+          <input type="number" id="weight-input" step="0.1" min="30" max="200">
+          <span class="settings-unit">kg</span>
+        </div>
+      </label>
+    </div>
+    <button id="weight-save-btn" class="sync-btn">Guardar peso</button>
+    <span id="weight-status"></span>
+    <div id="weight-history-list" class="weight-history-list"></div>
+
+    <h3>Conexiones</h3>
+    <p class="settings-intro">
+      Cada persona que use su propia copia de esta app conecta aquí sus
+      propias cuentas -- los datos de cada instalación son independientes,
+      nunca se mezclan entre sí.
+    </p>
+    <div id="connections-list" class="connections-list"></div>
+
+    <h3>Motor de tramos interesantes</h3>
+    <p class="settings-intro">
+      Estos 3 parametros calibran el motor de tramos interesantes (ver
+      DISENO_ANALISIS_TRAMOS). Guardar recalcula baselines y tramos de todas
+      las actividades ya descargadas -- puede tardar un momento.
+    </p>
+    <div class="settings-form">
+      <label>
+        <span class="settings-label">Divergencia máxima de pendiente</span>
+        <span class="settings-help">
+          Cuanto puede alejarse la pendiente de un punto nuevo de la media del
+          tramo actual antes de cortarlo y empezar uno nuevo.
+        </span>
+        <div class="settings-input-row">
+          <input type="number" id="setting-grade-divergence" step="0.1" min="0.5" max="15">
+          <span class="settings-unit">puntos %</span>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Distancia máxima de un tramo</span>
+        <span class="settings-help">
+          Tope de seguridad: aunque no haya ningun corte por piñón o
+          pendiente, no dejar crecer un tramo mas alla de esto.
+        </span>
+        <div class="settings-input-row">
+          <input type="number" id="setting-max-distance" step="50" min="200" max="20000">
+          <span class="settings-unit">metros</span>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Ventana del baseline adaptativo</span>
+        <span class="settings-help">
+          Los percentiles personales (que definen "normal para ti") se
+          calculan sobre tus salidas de los ultimos N dias, no sobre todo el
+          historico -- asi reflejan tu forma actual. Si esa ventana no tiene
+          datos suficientes todavia, se usa el historico completo de respaldo.
+        </span>
+        <div class="settings-input-row">
+          <input type="number" id="setting-window-days" step="5" min="14" max="365">
+          <span class="settings-unit">días</span>
+        </div>
+      </label>
+    </div>
+    <button id="settings-save-btn" class="sync-btn">Guardar y recalcular</button>
+    <span id="settings-status"></span>
+  </section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
