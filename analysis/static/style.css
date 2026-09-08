@@ -310,10 +310,19 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
   margin-bottom: 0.85em;
 }
 .segment-card h4 { margin: 0 0 0.55em; font-size: 1.02rem; }
-.segment-compare-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+.segment-compare-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; table-layout: fixed; }
 .segment-compare-table td, .segment-compare-table th { padding: 0.3em 0.55em; text-align: right; }
-.segment-compare-table th { text-align: left; color: var(--muted); font-weight: 600; }
-.segment-compare-table td:first-child, .segment-compare-table th:first-child { text-align: left; }
+/* antes esta regla ponia TODOS los th a la izquierda (incluidas las
+   cabeceras "A"/"B"), pero sus columnas de datos van a la derecha -- la
+   cabecera quedaba flotando lejos de su propia columna, muy cerca de la de
+   al lado. Solo la primera columna (la de las etiquetas, "Distancia" etc.)
+   debe ir a la izquierda, ver la regla de mas abajo. */
+.segment-compare-table th { color: var(--muted); font-weight: 600; }
+.segment-compare-table td:first-child, .segment-compare-table th:first-child { text-align: left; width: 34%; }
+/* separador vertical entre las columnas A y B, para que no se lean como un
+   bloque unico de numeros -- coincide con donde ya cambia el color (mejor/
+   peor) de cada dato. */
+.segment-compare-table td:last-child, .segment-compare-table th:last-child { border-left: 1px solid var(--border); }
 .better { color: #6fcf97; font-weight: 700; }
 .worse { color: #ff8787; font-weight: 700; }
 

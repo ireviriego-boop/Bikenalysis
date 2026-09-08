@@ -897,7 +897,7 @@ function renderCompare(cmp, trackA, trackB) {
       ]);
     }
     const table = el('table', { class: 'segment-compare-table' }, [
-      el('tr', {}, [el('th', {}, ['']), el('th', {}, ['A']), el('th', {}, ['B'])]),
+      el('tr', {}, [el('th', {}, ['']), el('th', {}, ['Actividad A']), el('th', {}, ['Actividad B'])]),
       row('Distancia', a.distance_m, b.distance_m, v => num(v / 1000, 2) + ' km'),
       row('Duración', a.duration_s, b.duration_s, fmtDuration, true),
       row('Vel. media', a.avg_speed_kmh, b.avg_speed_kmh, v => num(v, 1) + ' km/h', false),
