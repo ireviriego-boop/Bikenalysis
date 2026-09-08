@@ -232,18 +232,23 @@ def ensure_access_token(env):
 # --------------------------------------------------------- conversion ----
 
 def _sport_from_type(activity_type):
-    """El tipo de actividad de Strava ('Ride', 'Run', 'TrailRun',
-    'VirtualRide'...) se reduce a los dos deportes que soporta hoy el motor
-    (ver DISENO_ANALISIS_TRAMOS seccion 6/9 -- selector de deporte completo
-    queda para mas adelante). Cualquier otro tipo (nadar, andar...) se
-    descarta por ahora, no porque no importe sino porque el motor de tramos
-    no tiene todavia baselines/clasificador para ellos."""
+    """El tipo de actividad de Strava ('Ride', 'Run', 'TrailRun', 'Walk',
+    'WeightTraining'...) se reduce al deporte que usa el motor de tramos
+    internamente. Solo ciclismo y running tienen baselines/clasificador
+    propios (ver DISENO_ANALISIS_TRAMOS seccion 6/9); cualquier otro tipo
+    se agrupa en 'other' -- no se le detectan tramos (baselines.py no le
+    construye arbol, y sin arbol interesting_points.py lo salta), pero SI
+    se descarga y entra en el computo de carga/TRIMP (que solo necesita
+    pulso, no depende del deporte -- ver trimp.py). Antes se descartaban
+    del todo estas actividades; el usuario señalo que un dia duro de
+    gimnasio o una caminata larga tambien pesa en el cansancio con el que
+    se llega a la siguiente salida en bici, asi que mejor contarlas."""
     t = (activity_type or "").lower()
     if "run" in t:
         return "running"
     if "ride" in t or "bik" in t or "cycl" in t:
         return "cycling"
-    return None
+    return "other"
 
 
 # Strava distingue el TIPO concreto de actividad (sport_type, mas fino que
@@ -263,6 +268,42 @@ SPORT_TYPE_LABELS = {
     "Run": "Running",
     "TrailRun": "Running trail",
     "VirtualRun": "Running virtual",
+    # El motor no genera tramos para estos (ver _sport_from_type), pero se
+    # descargan igual para sumar su pulso al computo de carga/TRIMP.
+    "Walk": "Caminata",
+    "Hike": "Senderismo",
+    "Swim": "Natación",
+    "WeightTraining": "Musculación",
+    "Workout": "Entrenamiento",
+    "Crossfit": "Crossfit",
+    "Yoga": "Yoga",
+    "Pilates": "Pilates",
+    "Elliptical": "Elíptica",
+    "StairStepper": "Escalador",
+    "RockClimbing": "Escalada",
+    "AlpineSki": "Esquí alpino",
+    "BackcountrySki": "Esquí de travesía",
+    "NordicSki": "Esquí nórdico",
+    "Snowboard": "Snowboard",
+    "IceSkate": "Patinaje sobre hielo",
+    "InlineSkate": "Patinaje en línea",
+    "RollerSki": "Roller ski",
+    "Rowing": "Remo",
+    "Canoeing": "Piragüismo",
+    "Kayaking": "Kayak",
+    "StandUpPaddling": "Paddle surf",
+    "Surfing": "Surf",
+    "Kitesurf": "Kitesurf",
+    "Windsurf": "Windsurf",
+    "Golf": "Golf",
+    "Tennis": "Tenis",
+    "Badminton": "Bádminton",
+    "Squash": "Squash",
+    "Racquetball": "Ráquetbol",
+    "TableTennis": "Tenis de mesa",
+    "Soccer": "Fútbol",
+    "Skateboard": "Skate",
+    "Wheelchair": "Silla de ruedas",
 }
 
 
@@ -412,7 +453,6 @@ def cmd_sync(env, log=print):
     after = state.get("last_sync_epoch")
     page = 1
     new_count = 0
-    skipped_sport = 0
     new_activities = []
     new_summaries = []
     newest_epoch = after
@@ -436,10 +476,6 @@ def cmd_sync(env, log=print):
                 continue
 
             sport = _sport_from_type(item.get("type"))
-            if sport is None:
-                skipped_sport += 1
-                downloaded.add(activity_id)  # no reintentar cada vez, ya se ha visto
-                continue
             sport_detail = _sport_detail_from_type(item.get("type"), item.get("sport_type"))
 
             if _is_duplicate_start(start_epoch, known_starts):
@@ -489,8 +525,7 @@ def cmd_sync(env, log=print):
     save_json(STATE_FILE, state)
 
     log(f"Listo. {new_count} actividad(es) nueva(s) de Strava "
-        f"({skipped_sport} descartada(s) por deporte no soportado todavia, "
-        f"{skipped_duplicate} descartada(s) por ser duplicado de otra fuente).")
+        f"({skipped_duplicate} descartada(s) por ser duplicado de otra fuente).")
     return {"new_count": new_count, "new_activities": new_activities}
 
 

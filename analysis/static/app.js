@@ -80,7 +80,7 @@ document.getElementById('back-to-rides').addEventListener('click', () => showVie
 
 // ------------------------------------------------------------- rides list --
 
-const TYPE_ICON = { cycling: '🚴', running: '🏃' };
+const TYPE_ICON = { cycling: '🚴', running: '🏃', other: '🏅' };
 
 async function loadRides() {
   const res = await fetch('/api/rides');
@@ -709,7 +709,10 @@ function renderInterestingList(data) {
   wrap.innerHTML = '';
 
   if (!episodes.length) {
-    wrap.appendChild(el('p', { class: 'muted' }, ['No se han detectado tramos interesantes en esta actividad.']));
+    const msg = (data.sport !== 'cycling' && data.sport !== 'running')
+      ? 'Este tipo de actividad no se analiza por tramos (sin baseline propio) -- pero su pulso sí cuenta para tu carga de entrenamiento, ver Forma.'
+      : 'No se han detectado tramos interesantes en esta actividad.';
+    wrap.appendChild(el('p', { class: 'muted' }, [msg]));
     return;
   }
 
