@@ -67,15 +67,24 @@ def _load_records(activity_id):
         return json.load(f)["records"]
 
 
-def infer_max_hr(summaries):
+def infer_max_hr(summaries, age=None):
     """Pulso maximo inferido del historico (DISENO_ANALISIS_TRAMOS seccion
     8: a diferencia del reposo, el maximo si se puede inferir de los datos).
     Se usa el percentil 99 en vez del maximo absoluto: con miles de
     actividades (aqui, varias de Strava desde 2017) el maximo literal cae
     facilmente en un pico puntual del sensor (ej. 225 bpm sostenido no es
-    creible) que distorsionaria la reserva de pulso de TODO el TRIMP."""
+    creible) que distorsionaria la reserva de pulso de TODO el TRIMP.
+
+    Si no hay NINGUNA actividad con pulso maximo registrado (usuario muy
+    nuevo, o sin sensor de pulso todavia), se usa una formula generica por
+    edad (Tanaka et al. 2001, 208 - 0.7*edad -- mas fiable que la clasica
+    220-edad) si el usuario la ha dado; si no, un valor fijo de respaldo.
+    Es solo un arranque en frio -- en cuanto haya una sola actividad con
+    pulso real, esta rama deja de usarse."""
     vals = sorted(s["max_hr"] for s in summaries if s.get("max_hr"))
     if not vals:
+        if age:
+            return 208.0 - 0.7 * age
         return FALLBACK_MAX_HR
     if len(vals) < 20:
         return vals[-1]
@@ -198,7 +207,7 @@ def compute_fitness_series():
             json.dump(result, f, ensure_ascii=False)
         return result
 
-    max_hr = infer_max_hr(summaries)
+    max_hr = infer_max_hr(summaries, profile.get("age"))
     sex = profile.get("sex", "M")
     daily = _daily_trimp(summaries, resting_hr, max_hr, sex)
 

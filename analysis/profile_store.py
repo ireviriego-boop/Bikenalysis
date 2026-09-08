@@ -14,6 +14,18 @@ data/profile.json:
   con fecha (como las actividades) en vez de un unico valor -- necesario
   para vatios/kg en cada tramo con el peso que tocaba en esa fecha, no el
   peso de hoy.
+
+Campos opcionales de segundo orden (DISENO_ANALISIS_TRAMOS seccion 8), menos
+utiles con histórico real pero sirven de respaldo/afinado:
+- age: sin uso salvo como arranque en frio -- si un usuario NUEVO todavia no
+  tiene ni una actividad (por tanto sin pulso maximo inferido del historico,
+  ver trimp.infer_max_hr), se usa para estimar uno generico por edad en vez
+  de un valor fijo inventado. En cuanto haya historico real, se ignora.
+- leg_length_cm: mas preciso que la altura para normalizar la zancada en
+  running (dos personas de la misma altura pueden tener piernas de distinta
+  longitud) -- si esta, se usa en vez de height_cm para ese calculo. Altura
+  sigue siendo el valor por defecto porque es mucho mas facil de dar sin
+  medirse.
 """
 
 import json
@@ -39,6 +51,8 @@ DEFAULTS = {
     "resting_hr": None,
     "sex": "M",
     "height_cm": None,
+    "age": None,
+    "leg_length_cm": None,
     "weight_history": [],  # [{"date": "YYYY-MM-DD", "weight_kg": 78.0}, ...]
 }
 
@@ -81,6 +95,12 @@ def save_profile(partial):
         if "height_cm" in partial:
             v = partial["height_cm"]
             merged["height_cm"] = float(v) if v not in (None, "") else None
+        if "age" in partial:
+            v = partial["age"]
+            merged["age"] = int(v) if v not in (None, "") else None
+        if "leg_length_cm" in partial:
+            v = partial["leg_length_cm"]
+            merged["leg_length_cm"] = float(v) if v not in (None, "") else None
         return _save(merged)
 
 
