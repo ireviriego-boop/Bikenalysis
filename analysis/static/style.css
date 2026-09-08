@@ -107,18 +107,18 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5em, 1fr));
-  gap: 0.7em;
-  margin: 1em 0 1.3em;
+  grid-template-columns: repeat(auto-fit, minmax(7.5em, 1fr));
+  gap: 0.45em;
+  margin: 0.6em 0 0.8em;
 }
 .stat-card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0.7em 0.85em;
+  padding: 0.4em 0.65em;
 }
-.stat-card .label { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: .04em; }
-.stat-card .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.15em; }
+.stat-card .label { color: var(--muted); font-size: 0.68rem; text-transform: uppercase; letter-spacing: .04em; }
+.stat-card .value { font-size: 1.1rem; font-weight: 700; margin-top: 0.1em; }
 
 .detail-grid {
   display: grid;

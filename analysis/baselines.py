@@ -238,11 +238,21 @@ def main():
     window_days = settings_store.load_settings()["baseline_window_days"]
     cutoff_ts = time.time() - window_days * 86400
 
+    # Solo ciclismo y running tienen clasificador de tramos (piñon/cadencia/
+    # grado propios de cada uno -- ver DISENO_ANALISIS_TRAMOS seccion 6/9).
+    # Desde que strava_sync.py descarga tambien otros deportes (caminar,
+    # gimnasio...) para que aporten su pulso al TRIMP (ver _sport_from_type),
+    # hace falta filtrar aqui explicitamente -- sin este filtro se les
+    # construiria un arbol de baseline sin sentido (grado/piñon vacios) que
+    # ademas haria que interesting_points.py SI intentara clasificarlos.
+    SUPPORTED_SPORTS = ("cycling", "running")
     records_by_sport = {"cycling": [], "running": []}
     for path in sorted(RECORDS_DIR.glob("*.json.gz")):
         with gzip.open(path, "rt", encoding="utf-8") as f:
             d = json.load(f)
         sport = d.get("sport", "cycling")
+        if sport not in SUPPORTED_SPORTS:
+            continue
         records_by_sport.setdefault(sport, []).append(d["records"])
 
     baselines = {
