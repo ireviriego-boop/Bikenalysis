@@ -128,12 +128,32 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 }
 @media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
 
+.map-wrap { position: relative; }
 .map {
   height: clamp(320px, 34vw, 620px);
   border-radius: 8px;
   border: 1px solid var(--border);
   background: #10171d;
 }
+
+.wind-overlay {
+  position: absolute;
+  top: 0.6em;
+  right: 0.6em;
+  z-index: 500; /* por encima de los tiles y controles de Leaflet (max ~400) */
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  background: rgba(10, 16, 22, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.3em 0.7em 0.3em 0.5em;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+.wind-overlay svg { display: block; }
 
 .chart-panel {
   background: var(--panel);
@@ -325,7 +345,7 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .settings-label { font-weight: 600; font-size: 0.98rem; }
 .settings-help { color: var(--muted); font-size: 0.85rem; }
 .settings-input-row { display: flex; align-items: center; gap: 0.6em; margin-top: 0.2em; }
-.settings-input-row input {
+.settings-input-row input, .settings-input-row select {
   background: var(--panel); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 0.5em 0.7em; font-size: 0.95rem; width: 8em;
 }
@@ -356,6 +376,14 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .fatiga-badge.forma-cansado { background: rgba(255,169,77,0.18); color: #ffa94d; }
 .fatiga-badge.forma-muy-cansado { background: rgba(255,92,92,0.18); color: var(--verdict-atrancado); }
 .fatiga-note { color: var(--muted); }
+
+.ride-weather { margin: -0.6em 0 1.2em; font-size: 0.9rem; }
+.weather-badge {
+  display: inline-block; padding: 0.2em 0.7em; border-radius: 999px;
+  font-weight: 600; font-size: 0.85rem;
+  background: rgba(79,179,255,0.18); color: var(--accent);
+}
+.weather-note { color: var(--muted); }
 
 /* ------------------------------------------------------- vista de Forma - */
 /* un solo ancho para toda la vista (texto, indicador, grafica, lista) --

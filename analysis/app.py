@@ -73,6 +73,7 @@ import strava_sync  # noqa: E402
 import settings_store  # noqa: E402
 import profile_store  # noqa: E402
 import trimp  # noqa: E402
+import weather  # noqa: E402
 
 # Solo una sincronizacion/reconstruccion a la vez (por si se pulsa el boton
 # varias veces seguidas, o llega mas de una peticion al mismo tiempo).
@@ -325,6 +326,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
             if parsed.path == "/api/fitness":
                 self._send_json(trimp.load_fitness_summary())
+                return
+
+            if parsed.path == "/api/weather":
+                # viento/temperatura informativos del inicio de la actividad
+                # (ver weather.py) -- se piden bajo demanda, no en cada sync,
+                # para no golpear el servicio externo por cientos de actividades
+                # a la vez cuando la mayoria de veces nadie las va a abrir.
+                activity_id = qs.get("activity_id", [None])[0]
+                if not activity_id:
+                    self._send_json({"error": "falta activity_id"}, 400)
+                    return
+                data = load_records(activity_id)
+                if data is None:
+                    self._send_json({"error": "actividad no encontrada"}, 404)
+                    return
+                records = data["records"]
+                start = next((r for r in records if r.get("lat") is not None and r.get("lon") is not None), None)
+                if not start or not records[0].get("ts"):
+                    self._send_json({"error": "sin datos de posición para esta actividad"}, 400)
+                    return
+                result = weather.fetch_weather_for_activity(activity_id, start["lat"], start["lon"], records[0]["ts"])
+                self._send_json(result or {"error": "sin datos meteorológicos disponibles"})
                 return
 
             if parsed.path.startswith("/api/ride/"):

@@ -55,8 +55,12 @@
     <h2 id="ride-detail-title"></h2>
     <div id="ride-stats" class="stats-grid"></div>
     <div id="ride-fatiga-context" class="fatiga-context"></div>
+    <div id="ride-weather" class="ride-weather" hidden></div>
     <div class="detail-grid">
-      <div id="ride-map" class="map"></div>
+      <div class="map-wrap">
+        <div id="ride-map" class="map"></div>
+        <div id="wind-overlay" class="wind-overlay" hidden></div>
+      </div>
       <div class="chart-panel">
         <div id="chart-focus" class="chart-focus"></div>
         <div class="chart-with-history">
@@ -158,6 +162,32 @@
         <div class="settings-input-row">
           <input type="number" id="profile-height" step="1" min="120" max="230">
           <span class="settings-unit">cm</span>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Longitud de pierna (opcional)</span>
+        <span class="settings-help">Entrepierna hasta el suelo. Si la das, se usa en vez de la altura para normalizar la zancada -- afina más, porque dos personas de la misma altura pueden tener piernas de distinta longitud.</span>
+        <div class="settings-input-row">
+          <input type="number" id="profile-leg-length" step="1" min="60" max="120">
+          <span class="settings-unit">cm</span>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Sexo (opcional)</span>
+        <span class="settings-help">Afina ligeramente la fórmula del TRIMP (la constante de la ecuación de Banister difiere un poco entre hombre y mujer).</span>
+        <div class="settings-input-row">
+          <select id="profile-sex">
+            <option value="M">Hombre</option>
+            <option value="F">Mujer</option>
+          </select>
+        </div>
+      </label>
+      <label>
+        <span class="settings-label">Edad (opcional)</span>
+        <span class="settings-help">Solo se usa como arranque en frío, para estimar un pulso máximo genérico si todavía no tienes ninguna actividad con pulso registrado -- en cuanto haya una sola, se ignora este dato.</span>
+        <div class="settings-input-row">
+          <input type="number" id="profile-age" step="1" min="10" max="100">
+          <span class="settings-unit">años</span>
         </div>
       </label>
     </div>

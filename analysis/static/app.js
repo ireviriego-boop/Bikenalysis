@@ -210,9 +210,13 @@ function renderRideDetail(data) {
   }
   if (sport === 'running' && summary.avg_step_length_m) {
     // la zancada absoluta no dice mucho por si sola -- 85 cm no es lo mismo
-    // en 1,90m que en 1,60m, asi que se muestra tambien como % de la altura
-    // si el usuario la tiene configurada (Ajustes -> Perfil físico).
-    const pct = PROFILE.height_cm ? ` (${num(summary.avg_step_length_m * 100 / PROFILE.height_cm * 100, 0)}% de tu altura)` : '';
+    // en 1,90m que en 1,60m. La longitud de pierna (si esta) normaliza mejor
+    // que la altura -- dos personas de la misma altura pueden tener piernas
+    // de distinta longitud (proporcion torso/pierna), y es la pierna la que
+    // marca la zancada, no la altura total.
+    const denom = PROFILE.leg_length_cm || PROFILE.height_cm;
+    const denomLabel = PROFILE.leg_length_cm ? 'tu longitud de pierna' : 'tu altura';
+    const pct = denom ? ` (${num(summary.avg_step_length_m * 100 / denom * 100, 0)}% de ${denomLabel})` : '';
     cards.push(['Zancada media', `${num(summary.avg_step_length_m, 2)} m${pct}`]);
   }
   for (const [label, value] of cards) {
@@ -238,6 +242,8 @@ function renderRideDetail(data) {
     fatigaBox.innerHTML = '';
   }
 
+  loadWeather(data.activity_id);
+
   // Identificador estable por tramo (dentro de esta carga de la actividad):
   // deja que la lista de tramos de abajo y los marcadores del mapa se
   // refieran al mismo tramo sin ambiguedad al pinchar uno desde el otro.
@@ -245,6 +251,72 @@ function renderRideDetail(data) {
 
   for (const fn of [() => renderRideMap(data), () => renderRideChart(data), () => renderInterestingList(data)]) {
     try { fn(); } catch (e) { console.error('fallo renderizando seccion de detalle:', e); }
+  }
+}
+
+// ---------------------------------------------------------- meteo (viento) -
+// Ni Hammerhead ni Strava dan viento/temperatura en su API -- se pide a
+// Open-Meteo bajo demanda (ver /api/weather en app.py) solo al abrir una
+// actividad, nunca durante el sync. Es una foto aproximada de las
+// condiciones al empezar (un solo punto/hora), no un calculo de viento a
+// favor/en contra por tramo -- eso haria falta cruzarlo con el rumbo de
+// cada punto, mucho mas trabajo del pedido.
+//
+// Se muestra como una insignia FIJA en la esquina del mapa, no como un
+// marcador geografico -- un marcador anclado a un punto se ve minusculo
+// salvo haciendo mucho zoom (probado con el usuario, costaba encontrarlo);
+// fija en pantalla es igual de visible sea cual sea el zoom/pan.
+const WIND_COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+let weatherRequestId = 0;
+
+// Flecha apuntando hacia donde SOPLA el viento (direccion "hacia", no
+// "desde" -- mas intuitivo para un ciclista: "el viento va hacia el norte"
+// se lee igual que "voy a favor si voy hacia el norte").
+function windArrowSvg(fromDeg) {
+  const towardDeg = (fromDeg + 180) % 360;
+  // punta mas estrecha y alargada (ancho 10, largo 22) que antes (ancho 12,
+  // largo 16) -- a 14px se veia mas chevron romo que flecha, costaba
+  // distinguir hacia donde apuntaba.
+  return `<svg width="19" height="19" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" `
+    + `style="transform: rotate(${towardDeg}deg); display:block;">`
+    + `<path d="M13 0 L18 22 L13 16 L8 22 Z" fill="currentColor" stroke="#0a1016" stroke-width="1" stroke-linejoin="round"/>`
+    + `</svg>`;
+}
+
+async function loadWeather(activityId) {
+  const box = document.getElementById('ride-weather');
+  const overlay = document.getElementById('wind-overlay');
+  if (!box) return;
+  const reqId = ++weatherRequestId;
+  box.hidden = true;
+  if (overlay) overlay.hidden = true;
+
+  let w;
+  try {
+    const res = await fetch(`/api/weather?activity_id=${encodeURIComponent(activityId)}`);
+    w = await res.json();
+  } catch (e) {
+    w = null;
+  }
+  if (reqId !== weatherRequestId) return; // se abrio otra actividad mientras tanto
+  if (!w || w.error || w.wind_speed_kmh == null) return; // sin dato -- mejor no mostrar nada que uno a medias
+
+  const dirDeg = w.wind_direction_deg;
+  const dirLabel = dirDeg != null ? ` del ${WIND_COMPASS[Math.round(dirDeg / 45) % 8]}` : '';
+  const parts = [`🌬️ ${Math.round(w.wind_speed_kmh)} km/h${dirLabel}`];
+  if (w.temperature_c != null) parts.push(`${Math.round(w.temperature_c)}°C`);
+
+  box.innerHTML = '';
+  box.appendChild(el('span', { class: 'weather-badge' }, [parts.join(' · ')]));
+  box.appendChild(el('span', { class: 'weather-note' }, [' -- viento aproximado al empezar, solo informativo.']));
+  box.hidden = false;
+
+  if (overlay) {
+    overlay.innerHTML = '';
+    if (dirDeg != null) overlay.appendChild(el('span', { html: windArrowSvg(dirDeg) }, []));
+    overlay.appendChild(el('span', {}, [`${Math.round(w.wind_speed_kmh)} km/h`]));
+    overlay.title = `Viento: ${Math.round(w.wind_speed_kmh)} km/h${dirLabel}`;
+    overlay.hidden = false;
   }
 }
 
@@ -978,6 +1050,9 @@ async function loadProfile() {
   PROFILE = profile;
   document.getElementById('profile-resting-hr').value = profile.resting_hr ?? '';
   document.getElementById('profile-height').value = profile.height_cm ?? '';
+  document.getElementById('profile-leg-length').value = profile.leg_length_cm ?? '';
+  document.getElementById('profile-sex').value = profile.sex || 'M';
+  document.getElementById('profile-age').value = profile.age ?? '';
   const weightDateEl = document.getElementById('weight-date');
   if (!weightDateEl.value) weightDateEl.valueAsDate = new Date();
   renderWeightHistory(profile.weight_history || []);
@@ -989,6 +1064,9 @@ const profileStatus = document.getElementById('profile-status');
 profileSaveBtn.addEventListener('click', async () => {
   const restingHr = document.getElementById('profile-resting-hr').value;
   const heightCm = document.getElementById('profile-height').value;
+  const legLengthCm = document.getElementById('profile-leg-length').value;
+  const sex = document.getElementById('profile-sex').value;
+  const age = document.getElementById('profile-age').value;
   profileSaveBtn.disabled = true;
   profileStatus.className = '';
   profileStatus.textContent = 'Guardando...';
@@ -996,7 +1074,10 @@ profileSaveBtn.addEventListener('click', async () => {
     const res = await fetch('/api/profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resting_hr: restingHr, height_cm: heightCm }),
+      body: JSON.stringify({
+        resting_hr: restingHr, height_cm: heightCm,
+        leg_length_cm: legLengthCm, sex, age,
+      }),
     });
     const data = await res.json();
     if (!data.ok) {
