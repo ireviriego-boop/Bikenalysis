@@ -228,8 +228,21 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .chart-focus .focus-badge.verdict-fatiga { border-left-color: var(--verdict-fatiga); }
 .chart-focus .focus-badge.verdict-bien_ejecutado { border-left-color: var(--verdict-bien); }
 .chart-focus .focus-reset { padding: 0; font-size: 0.85rem; }
-.focus-reason { color: var(--muted); font-size: 0.82rem; max-width: 44em; }
+.focus-reason { font-size: 0.82rem; max-width: 44em; }
 .focus-stats { color: var(--text); font-size: 0.85rem; font-weight: 600; margin-top: 0.15em; }
+
+/* Titular corto en negrita con la conclusion + bullets debajo solo con las
+   comparaciones contra el historial personal -- reemplaza la frase unica y
+   densa de antes (mapa, panel de foco y lista de tramos usan estas mismas
+   clases). */
+.reason-headline { color: var(--text); font-weight: 700; }
+.reason-details { list-style: disc; margin: 0.3em 0 0 1.2em; padding: 0; color: var(--muted); font-size: 0.85em; }
+.reason-details li { margin-bottom: 0.15em; }
+.reason-details li:last-child { margin-bottom: 0; }
+/* Los popups de Leaflet tienen fondo blanco fijo (no siguen el tema oscuro
+   de la app) -- el texto claro de arriba quedaria casi invisible ahi. */
+.leaflet-popup-content .reason-headline { color: #222; }
+.leaflet-popup-content .reason-details { color: #555; }
 
 #interesting-list { font-size: 1rem; }
 #interesting-list > .muted { color: var(--muted); }
@@ -281,6 +294,13 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .tramo-group li.verdict-atrancado .badge { background: var(--verdict-atrancado); }
 .tramo-group li.verdict-fatiga .badge { background: var(--verdict-fatiga); }
 .tramo-group li.verdict-bien_ejecutado .badge { background: var(--verdict-bien); }
+.tramo-group li .reason-headline { font-size: 0.95rem; }
+.tramo-group li ul.reason-details {
+  list-style: disc;
+  margin: 0.3em 0 0 1.2em;
+  padding: 0;
+  font-size: 0.8rem;
+}
 .tramo-group li .meta { color: var(--muted); font-size: 0.82rem; margin-top: 0.35em; }
 
 .compare-pickers {

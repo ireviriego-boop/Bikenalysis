@@ -9,6 +9,30 @@ function fmtDuration(s) {
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
+// Para "a Xm de ruta": con "m" a secas, junto a cifras de distancia (piñon,
+// pendiente...) se lee facilmente como metros en vez de minutos.
+function fmtElapsed(s) {
+  if (s == null) return '-';
+  const h = Math.floor(s / 3600);
+  const m = Math.round((s % 3600) / 60);
+  return h > 0 ? `${h} h ${m} min` : `${m} min`;
+}
+
+// Que metricas ya se explican con contexto ("tu habitual...") en los bullets
+// del motivo -- para no repetirlas sin contexto en la linea de cifras en
+// bruto de al lado (popup del mapa, lista de tramos, panel de foco).
+function coveredMetrics(details) {
+  const covered = new Set();
+  for (const d of details || []) {
+    const label = d.split(':')[0].trim();
+    if (label === 'Pulso') covered.add('hr');
+    else if (label === 'Cadencia') covered.add('cadence');
+    else if (label === 'Potencia') covered.add('power');
+    else if (label === 'Piñón') covered.add('gear');
+  }
+  return covered;
+}
+
 function fmtDate(ts) {
   if (ts == null) return '-';
   const d = new Date(ts * 1000);
@@ -409,13 +433,22 @@ function renderRideMap(data) {
 
   for (const ep of data.interesting_points || []) {
     const color = VERDICT_COLOR[ep.verdict] || '#fff';
+    const covered = coveredMetrics(ep.reason_details);
+    const detailsHtml = (ep.reason_details && ep.reason_details.length)
+      ? `<ul class="reason-details">${ep.reason_details.map(d => `<li>${d}</li>`).join('')}</ul>`
+      : '';
+    const rawParts = [`pendiente ${num(ep.avg_grade_pct, 1)}%`];
+    if (!covered.has('cadence')) {
+      rawParts.push(`cadencia ${ep.avg_cadence ? Math.round(ep.avg_cadence) + ' ' + cadenceUnit(data.sport) : '-'}`);
+    }
+    if (!covered.has('power') && ep.avg_power) rawParts.push(`${Math.round(ep.avg_power)} W`);
+    if (!covered.has('gear') && ep.avg_rear_teeth) rawParts.push(`piñón ~${Math.round(ep.avg_rear_teeth)}T`);
     const popupHtml = `<b>${verdictLabel(ep.verdict)}</b> (${DIRECTION_LABEL[ep.direction] || ep.direction}, tier ${ep.reliability_tier})<br>` +
-      `${ep.reason}<br>` +
+      `<span class="reason-headline">${ep.reason_headline || ''}</span>` +
+      detailsHtml +
       `longitud ${fmtLength((ep.end_distance_m ?? 0) - (ep.start_distance_m ?? 0))} · ${Math.round(ep.duration_s)}s · ` +
-      `a ${fmtDuration(ep.elapsed_since_start_s)} de ruta<br>` +
-      `pendiente ${num(ep.avg_grade_pct, 1)}% · cadencia ${ep.avg_cadence ? Math.round(ep.avg_cadence) + ' ' + cadenceUnit(data.sport) : '-'}` +
-      (ep.avg_power ? ` · ${Math.round(ep.avg_power)} W` : '') +
-      (ep.avg_rear_teeth ? ` · piñón ~${Math.round(ep.avg_rear_teeth)}T` : '');
+      `a ${fmtElapsed(ep.elapsed_since_start_s)} de ruta<br>` +
+      rawParts.join(' · ');
 
     // Tramo coloreado sobre la propia ruta (no solo un punto): se recorta el
     // track por distancia acumulada entre el inicio y el fin del tramo.
@@ -458,20 +491,28 @@ function renderRideChart(data, focusEpisode) {
     resetBtn.addEventListener('click', () => { clearCustomSelectionLayer(); renderRideChart(data); });
     badgeRow.appendChild(resetBtn);
     focusLabel.appendChild(badgeRow);
-    if (focusEpisode.reason) {
-      focusLabel.appendChild(el('div', { class: 'focus-reason' }, [focusEpisode.reason]));
+    if (focusEpisode.reason_headline) {
+      const reasonBlock = el('div', { class: 'focus-reason' }, [
+        el('div', { class: 'reason-headline' }, [focusEpisode.reason_headline]),
+      ]);
+      if (focusEpisode.reason_details && focusEpisode.reason_details.length) {
+        reasonBlock.appendChild(el('ul', { class: 'reason-details' },
+          focusEpisode.reason_details.map(d => el('li', {}, [d]))));
+      }
+      focusLabel.appendChild(reasonBlock);
     }
     // Resumen numerico del propio tramo enfocado -- un tramo automatico ya
     // lo lleva en el popup del mapa y en la lista de abajo, pero uno elegido
     // a mano (arrastrando) no tiene ninguno de los dos, asi que sin esto se
     // veian las cifras de "otras veces por aqui" pero nunca las de la propia
     // seleccion (lo que se estaba comparando).
+    const focusCovered = coveredMetrics(focusEpisode.reason_details);
     const statParts = [];
     if (focusEpisode.avg_grade_pct != null) statParts.push(`pendiente ${num(focusEpisode.avg_grade_pct, 1)}%`);
-    statParts.push(`FC ${focusEpisode.avg_hr ? Math.round(focusEpisode.avg_hr) : '-'} bpm`);
-    if (focusEpisode.avg_cadence) statParts.push(`cadencia ${Math.round(focusEpisode.avg_cadence)} ${cadenceUnit(data.sport)}`);
-    if (focusEpisode.avg_power) statParts.push(`${Math.round(focusEpisode.avg_power)} W`);
-    if (focusEpisode.avg_rear_teeth) statParts.push(`piñón ~${Math.round(focusEpisode.avg_rear_teeth)}T`);
+    if (!focusCovered.has('hr')) statParts.push(`FC ${focusEpisode.avg_hr ? Math.round(focusEpisode.avg_hr) : '-'} bpm`);
+    if (!focusCovered.has('cadence') && focusEpisode.avg_cadence) statParts.push(`cadencia ${Math.round(focusEpisode.avg_cadence)} ${cadenceUnit(data.sport)}`);
+    if (!focusCovered.has('power') && focusEpisode.avg_power) statParts.push(`${Math.round(focusEpisode.avg_power)} W`);
+    if (!focusCovered.has('gear') && focusEpisode.avg_rear_teeth) statParts.push(`piñón ~${Math.round(focusEpisode.avg_rear_teeth)}T`);
     focusLabel.appendChild(el('div', { class: 'focus-stats' }, [statParts.join(' · ')]));
     document.getElementById('tramo-history').hidden = false;
     loadTramoHistory(data.activity_id, focusEpisode, data.sport);
@@ -754,21 +795,29 @@ const TRAMO_GROUPS = [
 ];
 
 function tramoListItem(data, ep) {
+  const headlineRow = el('div', {}, [
+    el('span', { class: 'badge' }, [verdictLabel(ep.verdict)]),
+    el('span', { class: 'reason-headline' }, [ep.reason_headline || '']),
+  ]);
+  const children = [headlineRow];
+  if (ep.reason_details && ep.reason_details.length) {
+    children.push(el('ul', { class: 'reason-details' },
+      ep.reason_details.map(d => el('li', {}, [d]))));
+  }
+  const listCovered = coveredMetrics(ep.reason_details);
+  const metaParts = [
+    `${DIRECTION_LABEL[ep.direction] || ep.direction} · tier ${ep.reliability_tier}`,
+    `${Math.round(ep.duration_s)}s · a ${fmtElapsed(ep.elapsed_since_start_s)} de ruta`,
+    `pendiente media ${num(ep.avg_grade_pct, 1)}%`,
+  ];
+  if (!listCovered.has('hr')) metaParts.push(`FC ${ep.avg_hr ? Math.round(ep.avg_hr) : '-'} bpm`);
+  if (!listCovered.has('cadence') && ep.avg_cadence) metaParts.push(`cadencia ${Math.round(ep.avg_cadence)} ${cadenceUnit(data.sport)}`);
+  if (!listCovered.has('power') && ep.avg_power) metaParts.push(`${Math.round(ep.avg_power)} W`);
+  if (!listCovered.has('gear') && ep.avg_rear_teeth) metaParts.push(`piñón ~${Math.round(ep.avg_rear_teeth)}T`);
+  metaParts.push(`a ${num((ep.distance_m || 0) / 1000, 1)} km`);
   const li = el('li', { class: `verdict-${ep.verdict}` }, [
-    el('div', {}, [
-      el('span', { class: 'badge' }, [verdictLabel(ep.verdict)]),
-      ep.reason,
-    ]),
-    el('div', { class: 'meta' }, [
-      `${DIRECTION_LABEL[ep.direction] || ep.direction} · tier ${ep.reliability_tier} · ` +
-      `${Math.round(ep.duration_s)}s · a ${fmtDuration(ep.elapsed_since_start_s)} de ruta · ` +
-      `pendiente media ${num(ep.avg_grade_pct, 1)}% · ` +
-      `FC ${ep.avg_hr ? Math.round(ep.avg_hr) : '-'} bpm` +
-      (ep.avg_cadence ? ` · cadencia ${Math.round(ep.avg_cadence)} ${cadenceUnit(data.sport)}` : '') +
-      (ep.avg_power ? ` · ${Math.round(ep.avg_power)} W` : '') +
-      (ep.avg_rear_teeth ? ` · piñón ~${Math.round(ep.avg_rear_teeth)}T` : '') +
-      ` · a ${num((ep.distance_m || 0) / 1000, 1)} km`,
-    ]),
+    ...children,
+    el('div', { class: 'meta' }, [metaParts.join(' · ')]),
   ]);
   li.addEventListener('click', () => focusTramo(data, ep));
   return li;

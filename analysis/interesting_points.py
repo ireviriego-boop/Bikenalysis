@@ -237,11 +237,10 @@ def _classify_climb(agg, bl, sport, weight_kg=None):
             hr_spiked = hr > hr_bl90["p90"] + HR_MARGIN_BPM
             if power_normal and hr_spiked:
                 wkg = f" (~{power / weight_kg:.1f} W/kg)" if weight_kg else ""
-                return ("fatiga", 1,
-                        f"potencia dentro de lo normal para ti en subida ({power:.0f} W{wkg}, "
-                        f"tu habitual {pw_bl['p25']:.0f}-{pw_bl['p75']:.0f} W) pero el pulso se ha disparado "
-                        f"({hr:.0f} bpm, por encima de tu {hr_bl90['p90']:.0f} bpm habitual como máximo) "
-                        "-- señal de fatiga acumulada, no de técnica")
+                return ("fatiga", 1, "Señal de fatiga acumulada, no de técnica", [
+                    f"Potencia: {power:.0f} W{wkg} (tu habitual {pw_bl['p25']:.0f}-{pw_bl['p75']:.0f} W) -- normal para ti",
+                    f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl90['p90']:.0f}) -- disparado",
+                ])
 
     if not have_hr:
         # Tier 5 -- solo GPS+velocidad (sin pulso): comparar la velocidad del
@@ -250,13 +249,14 @@ def _classify_climb(agg, bl, sport, weight_kg=None):
         speed = agg["avg_speed_kmh"]
         if speed_bl and speed is not None:
             if speed <= speed_bl["p25"] - SPEED_MARGIN_KMH:
-                return ("atrancado", 5,
-                        f"vas a {speed:.1f} km/h en esta pendiente, más lento que tu habitual "
-                        f"(desde {speed_bl['p25']:.1f} km/h) -- sin pulso ni marcha registrados para afinar más")
+                return ("atrancado", 5, "Más lento de lo habitual en esta pendiente", [
+                    f"Velocidad: {speed:.1f} km/h (tu habitual desde {speed_bl['p25']:.1f} km/h)",
+                    "Sin pulso ni marcha registrados para afinar más",
+                ])
             if speed_bl["p25"] + SPEED_MARGIN_KMH < speed < speed_bl["p75"] - SPEED_MARGIN_KMH:
-                return ("bien_ejecutado", 5,
-                        f"vas a {speed:.1f} km/h en esta pendiente, dentro de tu ritmo habitual "
-                        f"({speed_bl['p25']:.1f}-{speed_bl['p75']:.1f} km/h)")
+                return ("bien_ejecutado", 5, "Dentro de tu ritmo habitual en esta pendiente", [
+                    f"Velocidad: {speed:.1f} km/h (tu habitual {speed_bl['p25']:.1f}-{speed_bl['p75']:.1f} km/h)",
+                ])
         return None
 
     hr_bl = _band(bl, "climbing_hr")
@@ -276,54 +276,70 @@ def _classify_climb(agg, bl, sport, weight_kg=None):
     # Tier 2 -- piñon + cadencia + pulso + pendiente (el caso ideal).
     if gear_bl and cad_bl:
         if gear_hard and hr_high and cad_low:
-            return ("atrancado", 2,
-                    f"piñón pequeño (~{rear:.0f}T, tu habitual desde {gear_bl['p25']:.0f}T), "
-                    f"pulso alto ({hr:.0f} bpm, tu habitual hasta {hr_bl['p75']:.0f}) y "
-                    f"cadencia baja ({cadence:.0f} {cad_unit}, tu habitual desde {cad_bl['p25']:.0f}) "
-                    "-- sube a un piñón más grande")
+            return ("atrancado", 2, "Sube a un piñón más grande", [
+                f"Piñón: ~{rear:.0f}T (tu habitual desde {gear_bl['p25']:.0f}T)",
+                f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl['p75']:.0f})",
+                f"Cadencia: {cadence:.0f} {cad_unit} (tu habitual desde {cad_bl['p25']:.0f})",
+            ])
         if gear_ok and hr_ok and cad_ok:
-            return ("bien_ejecutado", 2,
-                    f"piñón (~{rear:.0f}T) y cadencia ({cadence:.0f} {cad_unit}) adecuados, "
-                    f"pulso controlado ({hr:.0f} bpm)")
+            return ("bien_ejecutado", 2, "Piñón y cadencia adecuados para esta subida", [
+                f"Piñón: ~{rear:.0f}T",
+                f"Cadencia: {cadence:.0f} {cad_unit}",
+                f"Pulso: {hr:.0f} bpm -- controlado",
+            ])
         return None
 
     # Tier 3 -- uno de los dos (piñon o cadencia) + pulso + pendiente.
     if gear_bl and not cad_bl:
         if gear_hard and hr_high:
-            return ("atrancado", 3,
-                    f"piñón pequeño (~{rear:.0f}T, tu habitual desde {gear_bl['p25']:.0f}T) con pulso alto "
-                    f"({hr:.0f} bpm, tu habitual hasta {hr_bl['p75']:.0f}) en subida (sin cadencia) "
-                    "-- prueba un piñón más grande")
+            return ("atrancado", 3, "Prueba un piñón más grande", [
+                f"Piñón: ~{rear:.0f}T (tu habitual desde {gear_bl['p25']:.0f}T)",
+                f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl['p75']:.0f})",
+                "Sin datos de cadencia para afinar más",
+            ])
         if gear_ok and hr_ok:
-            return ("bien_ejecutado", 3,
-                    f"piñón (~{rear:.0f}T) adecuado, pulso controlado ({hr:.0f} bpm; sin cadencia)")
+            return ("bien_ejecutado", 3, "Piñón adecuado para esta subida", [
+                f"Piñón: ~{rear:.0f}T",
+                f"Pulso: {hr:.0f} bpm -- controlado",
+                "Sin datos de cadencia",
+            ])
         return None
 
     if cad_bl and not gear_bl:
         if cad_low and hr_high:
-            reason = (
-                f"cadencia baja ({cadence:.0f} {cad_unit}, tu habitual desde {cad_bl['p25']:.0f}) y pulso alto "
-                f"({hr:.0f} bpm, tu habitual hasta {hr_bl['p75']:.0f}) en esta subida -- ritmo forzado para esta pendiente"
-                if sport == "running" else
-                f"esfuerzo duro en subida con cadencia baja ({cadence:.0f} {cad_unit}, tu habitual desde "
-                f"{cad_bl['p25']:.0f}) y pulso alto ({hr:.0f} bpm, tu habitual hasta {hr_bl['p75']:.0f}; "
-                "sin datos de marcha) -- probablemente vas atrancado"
-            )
-            return ("atrancado", 3, reason)
+            if sport == "running":
+                headline = "Ritmo forzado para esta pendiente"
+                details = [
+                    f"Cadencia: {cadence:.0f} {cad_unit} (tu habitual desde {cad_bl['p25']:.0f})",
+                    f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl['p75']:.0f})",
+                ]
+            else:
+                headline = "Probablemente vas atrancado"
+                details = [
+                    f"Cadencia: {cadence:.0f} {cad_unit} (tu habitual desde {cad_bl['p25']:.0f})",
+                    f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl['p75']:.0f})",
+                    "Sin datos de marcha",
+                ]
+            return ("atrancado", 3, headline, details)
         if cad_ok and hr_ok:
-            reason = (f"cadencia ({cadence:.0f} {cad_unit}) y pulso ({hr:.0f} bpm) dentro de lo normal" if sport == "running" else
-                       f"cadencia cómoda ({cadence:.0f} {cad_unit}), pulso controlado ({hr:.0f} bpm; sin marcha)")
-            return ("bien_ejecutado", 3, reason)
+            if sport == "running":
+                headline = "Cadencia y pulso dentro de lo normal"
+                details = [f"Cadencia: {cadence:.0f} {cad_unit}", f"Pulso: {hr:.0f} bpm"]
+            else:
+                headline = "Cadencia cómoda, pulso controlado"
+                details = [f"Cadencia: {cadence:.0f} {cad_unit}", f"Pulso: {hr:.0f} bpm", "Sin datos de marcha"]
+            return ("bien_ejecutado", 3, headline, details)
         return None
 
     # Tier 4 -- solo pulso + pendiente.
-    extra = "sin datos de cadencia" if sport == "running" else "sin datos de marcha/cadencia"
+    extra = "Sin datos de cadencia" if sport == "running" else "Sin datos de marcha ni cadencia"
     hr_very_high = hr >= hr_bl["p90"] + HR_MARGIN_BPM
     if hr_very_high:
-        return ("atrancado", 4,
-                f"pulso muy alto en esta subida ({hr:.0f} bpm, tu habitual hasta {hr_bl['p90']:.0f}; {extra})")
+        return ("atrancado", 4, "Pulso muy alto para esta subida", [
+            f"Pulso: {hr:.0f} bpm (tu habitual hasta {hr_bl['p90']:.0f})", extra,
+        ])
     if hr_ok:
-        return ("bien_ejecutado", 4, f"pulso controlado en esta subida ({hr:.0f} bpm; {extra})")
+        return ("bien_ejecutado", 4, "Pulso controlado en esta subida", [f"Pulso: {hr:.0f} bpm", extra])
     return None
 
 
@@ -355,39 +371,50 @@ def _classify_descent(agg, bl, sport):
 
     if gear_bl and cad_bl:
         if gear_easy and cad_very_high:
-            return ("atrancado", 2,
-                    f"piñón grande (~{rear:.0f}T, tu habitual hasta {gear_bl['p75']:.0f}T) obliga a pedalear "
-                    f"muy rápido en esta bajada ({cadence:.0f} rpm, tu habitual hasta {cad_bl['p75']:.0f}) "
-                    "-- prueba un piñón más pequeño para bajar el ritmo")
+            return ("atrancado", 2, "Prueba un piñón más pequeño para bajar el ritmo", [
+                f"Piñón: ~{rear:.0f}T (tu habitual hasta {gear_bl['p75']:.0f}T)",
+                f"Cadencia: {cadence:.0f} rpm (tu habitual hasta {cad_bl['p75']:.0f}) -- muy rápida",
+            ])
         if gear_ok and cad_ok:
-            return ("bien_ejecutado", 2,
-                    f"piñón (~{rear:.0f}T) bien elegido para esta bajada ({cadence:.0f} rpm)")
+            return ("bien_ejecutado", 2, "Piñón bien elegido para esta bajada", [
+                f"Piñón: ~{rear:.0f}T", f"Cadencia: {cadence:.0f} rpm",
+            ])
         return None
 
     if gear_bl and not cad_bl:
         if gear_easy:
-            return ("atrancado", 3,
-                    f"piñón grande (~{rear:.0f}T, tu habitual hasta {gear_bl['p75']:.0f}T) en esta bajada "
-                    "(sin cadencia) -- probablemente vas pedaleando más rápido de lo cómodo")
+            return ("atrancado", 3, "Probablemente vas pedaleando más rápido de lo cómodo", [
+                f"Piñón: ~{rear:.0f}T (tu habitual hasta {gear_bl['p75']:.0f}T)",
+                "Sin datos de cadencia",
+            ])
         if gear_ok:
-            return ("bien_ejecutado", 3, f"piñón (~{rear:.0f}T) razonable para esta bajada (sin cadencia)")
+            return ("bien_ejecutado", 3, "Piñón razonable para esta bajada", [
+                f"Piñón: ~{rear:.0f}T", "Sin datos de cadencia",
+            ])
         return None
 
     if cad_bl and not gear_bl:
         if cad_very_high:
-            return ("atrancado", 3,
-                    f"cadencia muy alta en esta bajada ({cadence:.0f} rpm, tu habitual hasta {cad_bl['p75']:.0f}; "
-                    "sin datos de marcha) -- prueba un piñón más pequeño")
+            return ("atrancado", 3, "Prueba un piñón más pequeño", [
+                f"Cadencia: {cadence:.0f} rpm (tu habitual hasta {cad_bl['p75']:.0f}) -- muy alta",
+                "Sin datos de marcha",
+            ])
         if cad_ok:
-            return ("bien_ejecutado", 3, f"cadencia cómoda en esta bajada ({cadence:.0f} rpm; sin marcha)")
+            return ("bien_ejecutado", 3, "Cadencia cómoda para esta bajada", [
+                f"Cadencia: {cadence:.0f} rpm", "Sin datos de marcha",
+            ])
         return None
 
     return None
 
 
 def classify_tramo(agg, bl, sport="cycling", weight_kg=None):
-    """Devuelve (verdict, reliability_tier, reason, direction) o None si el
-    tramo es llano (sin veredicto) o no hay señal suficiente para uno claro."""
+    """Devuelve (verdict, reliability_tier, reason_headline, reason_details,
+    direction) o None si el tramo es llano (sin veredicto) o no hay señal
+    suficiente para uno claro. reason_headline es una frase corta con la
+    conclusion; reason_details es una lista de comparaciones contra tu
+    historial personal (para pintar como bullets en la interfaz, en vez de
+    una unica frase larga que mezcla conclusion y datos)."""
     grade = agg["avg_grade_pct"]
     if grade is None:
         return None
@@ -406,8 +433,8 @@ def classify_tramo(agg, bl, sport="cycling", weight_kg=None):
 
     if result is None:
         return None
-    verdict, tier, reason = result
-    return verdict, tier, reason, direction
+    verdict, tier, headline, details = result
+    return verdict, tier, headline, details, direction
 
 
 def find_interesting_points(records, baselines, sport="cycling", weight_kg=None, min_duration_s=MIN_DURATION_S):
@@ -431,12 +458,13 @@ def find_interesting_points(records, baselines, sport="cycling", weight_kg=None,
         classified = classify_tramo(agg, baselines, sport, weight_kg)
         if classified is None:
             continue
-        verdict, tier, reason, direction = classified
+        verdict, tier, headline, details, direction = classified
         episode = dict(agg)
         episode.update({
             "verdict": verdict,
             "reliability_tier": tier,
-            "reason": reason,
+            "reason_headline": headline,
+            "reason_details": details,
             "direction": direction,
             "elapsed_since_start_s": (agg["start_ts"] - ride_start_ts) if ride_start_ts is not None else None,
         })
@@ -477,7 +505,7 @@ def analyze_custom_range(records, start_distance_m, end_distance_m, baselines, s
     episode = dict(agg)
     classified = classify_tramo(agg, baselines, sport, weight_kg)
     if classified:
-        verdict, tier, reason, direction = classified
+        verdict, tier, headline, details, direction = classified
     else:
         verdict, tier, direction = None, None, None
         grade = agg["avg_grade_pct"]
@@ -495,28 +523,25 @@ def analyze_custom_range(records, start_distance_m, end_distance_m, baselines, s
         # muy por encima del umbral de 2.6%, etiquetada "subida suave" por no
         # distinguir estos dos casos).
         if grade is None:
-            reason = ("Sin datos de pendiente suficientes en esta selección -- aquí tienes el "
-                       "resumen y el historial de otras veces por aquí.")
+            headline = "Sin datos de pendiente suficientes en esta selección"
+            details = []
         elif grade >= climbing_thr or grade <= descending_thr:
             tendencia = "subida" if grade >= climbing_thr else "bajada"
-            reason = (f"Pendiente media del {grade:.1f}% en esta selección -- sí es una {tendencia} real "
-                       f"para ti (por encima de tu umbral habitual), pero no hay suficientes datos de pulso/"
-                       "cadencia/marcha/velocidad en esta selección concreta para darte un diagnóstico. Aquí "
-                       "tienes el resumen y el historial de otras veces por aquí.")
+            headline = f"Es una {tendencia} real para ti, pero sin datos suficientes para un diagnóstico"
+            details = [f"Pendiente: {grade:.1f}% (por encima de tu umbral habitual de {tendencia})",
+                       "Sin suficientes datos de pulso/cadencia/marcha/velocidad en esta selección"]
         elif -0.5 <= grade <= 0.5:
-            reason = ("Tramo llano (pendiente media cercana a 0%) -- no aplica un veredicto de "
-                       "atrancado/bien ejecutado, pero aquí tienes el resumen y el historial de "
-                       "otras veces por aquí.")
+            headline = "Tramo llano -- no aplica un veredicto de atrancado/bien ejecutado"
+            details = []
         else:
             tendencia, umbral = ("subida", climbing_thr) if grade > 0 else ("bajada", descending_thr)
-            reason = (f"Pendiente media del {grade:.1f}% en esta selección ({tendencia} suave) -- por "
-                       f"debajo de tu umbral habitual de {tendencia} ({umbral:.1f}%) para tener un "
-                       "veredicto de atrancado/bien ejecutado, pero aquí tienes el resumen y el "
-                       "historial de otras veces por aquí.")
+            headline = f"{tendencia.capitalize()} suave, por debajo de tu umbral habitual"
+            details = [f"Pendiente: {grade:.1f}% (tu umbral de {tendencia}: {umbral:.1f}%)"]
     episode.update({
         "verdict": verdict,
         "reliability_tier": tier,
-        "reason": reason,
+        "reason_headline": headline,
+        "reason_details": details,
         "direction": direction,
         "elapsed_since_start_s": (agg["start_ts"] - ride_start_ts) if ride_start_ts is not None else None,
         "custom": True,
