@@ -87,6 +87,17 @@ function runningReferenceText(heightCm, speedKmh) {
   return text;
 }
 
+// Version para el panel de un tramo concreto -- la longitud de pierna ya se
+// explica una vez en la cabecera de la actividad; repetirla en cada tramo
+// enfocado es redundante, aqui solo interesa la cadencia (que si cambia con
+// el ritmo real de ESE tramo).
+function runningReferenceCadenceText(heightCm, speedKmh) {
+  if (!heightCm) return null;
+  const cadence = refCadenceRangeSpm(refLegLengthCm(heightCm), speedKmh);
+  if (!cadence) return null;
+  return `Referencia externa: a este ritmo, la cadencia de referencia para tu fisonomía rondaría ${num(cadence[0], 0)}-${num(cadence[1], 0)} zpm.`;
+}
+
 function cyclingReferenceText(legLengthCm) {
   let text = `Referencia externa: cadencia de pedaleo eficiente habitual ~${REF_CYCLING_CADENCE_RPM[0]}-${REF_CYCLING_CADENCE_RPM[1]} rpm (no depende mucho de la altura)`;
   if (legLengthCm) {
@@ -95,6 +106,13 @@ function cyclingReferenceText(legLengthCm) {
   }
   text += '.';
   return text;
+}
+
+// Version para el panel de un tramo concreto -- la altura de sillin no
+// cambia de un tramo a otro (ya se explico una vez en la cabecera), aqui
+// solo la cadencia de referencia tiene sentido repetirla.
+function cyclingReferenceCadenceText() {
+  return `Referencia externa: cadencia de pedaleo eficiente habitual ~${REF_CYCLING_CADENCE_RPM[0]}-${REF_CYCLING_CADENCE_RPM[1]} rpm.`;
 }
 
 function fmtDate(ts) {
@@ -335,9 +353,6 @@ function renderRideDetail(data) {
     fatigaBox.appendChild(el('span', { class: `fatiga-badge forma-${fc.forma_label.replace(/ /g, '-')}` }, [
       `Llegabas a esta actividad ${fc.forma_label}`,
     ]));
-    fatigaBox.appendChild(el('span', { class: 'fatiga-note' }, [
-      ' -- solo informativo, no cambia el diagnóstico de los tramos de abajo.',
-    ]));
   } else {
     fatigaBox.hidden = true;
     fatigaBox.innerHTML = '';
@@ -409,7 +424,6 @@ async function loadWeather(activityId) {
 
   box.innerHTML = '';
   box.appendChild(el('span', { class: 'weather-badge' }, [parts.join(' · ')]));
-  box.appendChild(el('span', { class: 'weather-note' }, [' -- viento aproximado al empezar, solo informativo.']));
   box.hidden = false;
 
   if (overlay) {
@@ -524,7 +538,7 @@ function renderRideMap(data) {
       `<span class="reason-headline">${ep.reason_headline || ''}</span>` +
       detailsHtml +
       `longitud ${fmtLength((ep.end_distance_m ?? 0) - (ep.start_distance_m ?? 0))} · ${Math.round(ep.duration_s)}s · ` +
-      `a ${fmtElapsed(ep.elapsed_since_start_s)} de ruta<br>` +
+      `a ${fmtElapsed(ep.elapsed_since_start_s)} desde el inicio de la ruta<br>` +
       rawParts.join(' · ');
 
     // Tramo coloreado sobre la propia ruta (no solo un punto): se recorta el
@@ -592,8 +606,8 @@ function renderRideChart(data, focusEpisode) {
     if (!focusCovered.has('gear') && focusEpisode.avg_rear_teeth) statParts.push(`piñón ~${Math.round(focusEpisode.avg_rear_teeth)}T`);
     focusLabel.appendChild(el('div', { class: 'focus-stats' }, [statParts.join(' · ')]));
     const focusRefText = data.sport === 'running'
-      ? runningReferenceText(PROFILE.height_cm, focusEpisode.avg_speed_kmh)
-      : (data.sport === 'cycling' ? cyclingReferenceText(PROFILE.leg_length_cm) : null);
+      ? runningReferenceCadenceText(PROFILE.height_cm, focusEpisode.avg_speed_kmh)
+      : (data.sport === 'cycling' ? cyclingReferenceCadenceText() : null);
     if (focusRefText) {
       focusLabel.appendChild(el('div', { class: 'reference-note focus-reference' }, [focusRefText]));
     }
@@ -830,7 +844,7 @@ async function loadTramoHistory(activityId, ep, sport) {
   panel.innerHTML = '';
   panel.appendChild(el('div', { class: 'tramo-history-title' }, ['Otras veces por aquí']));
   panel.appendChild(el('div', { class: 'tramo-history-note' }, [
-    'Solo informativo sobre este tramo exacto -- el veredicto de arriba compara con tu historial completo de subidas/bajadas, no con estas pasadas.',
+    'El veredicto de arriba compara con tu historial completo de subidas/bajadas, no con estas pasadas.',
   ]));
   const matches = data && data.matches || [];
   if (!data) {
@@ -890,7 +904,7 @@ function tramoListItem(data, ep) {
   const listCovered = coveredMetrics(ep.reason_details);
   const metaParts = [
     `${DIRECTION_LABEL[ep.direction] || ep.direction} · tier ${ep.reliability_tier}`,
-    `${Math.round(ep.duration_s)}s · a ${fmtElapsed(ep.elapsed_since_start_s)} de ruta`,
+    `${Math.round(ep.duration_s)}s · a ${fmtElapsed(ep.elapsed_since_start_s)} desde el inicio de la ruta`,
     `pendiente media ${num(ep.avg_grade_pct, 1)}%`,
   ];
   if (!listCovered.has('hr')) metaParts.push(`FC ${ep.avg_hr ? Math.round(ep.avg_hr) : '-'} bpm`);

@@ -385,9 +385,13 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .better { color: #6fcf97; font-weight: 700; }
 .worse { color: #ff8787; font-weight: 700; }
 
-#view-settings h3 { margin: 1.3em 0 0.4em; font-size: 1.05rem; }
-#view-settings h3:first-of-type { margin-top: 0.6em; }
-#view-settings h4 { margin: 1.1em 0 0.3em; font-size: 0.95rem; color: var(--muted); }
+#view-settings h3, .help-view h3 { margin: 1.3em 0 0.4em; font-size: 1.05rem; }
+#view-settings h3:first-of-type, .help-view h3:first-of-type { margin-top: 0.6em; }
+#view-settings h4, .help-view h4 { margin: 1.1em 0 0.3em; font-size: 0.95rem; color: var(--muted); }
+
+.help-list { color: var(--muted); max-width: 44em; margin: 0 0 1.3em; padding-left: 1.4em; }
+.help-list li { margin-bottom: 0.5em; }
+.help-list strong { color: var(--text); }
 
 .connections-list { display: flex; flex-direction: column; gap: 0.6em; max-width: 44em; margin-bottom: 1.6em; }
 .connection-row {
@@ -402,6 +406,7 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .connection-row .sync-btn { flex-shrink: 0; }
 
 .settings-intro { color: var(--muted); max-width: 44em; margin-bottom: 1.3em; }
+.settings-intro strong { color: var(--text); }
 .settings-form {
   display: flex;
   flex-direction: column;
@@ -443,7 +448,6 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
 .fatiga-badge.forma-normal { background: rgba(148,163,184,0.18); color: var(--muted); }
 .fatiga-badge.forma-cansado { background: rgba(255,169,77,0.18); color: #ffa94d; }
 .fatiga-badge.forma-muy-cansado { background: rgba(255,92,92,0.18); color: var(--verdict-atrancado); }
-.fatiga-note { color: var(--muted); }
 
 .reference-note { margin: -0.6em 0 1.2em; font-size: 0.85rem; color: var(--muted); font-style: italic; }
 .focus-reference { margin: 0.3em 0 0; font-size: 0.8rem; max-width: 44em; }
@@ -454,7 +458,6 @@ tbody tr:hover { background: var(--panel-2); cursor: pointer; }
   font-weight: 600; font-size: 0.85rem;
   background: rgba(79,179,255,0.18); color: var(--accent);
 }
-.weather-note { color: var(--muted); }
 
 /* ------------------------------------------------------- vista de Forma - */
 /* un solo ancho para toda la vista (texto, indicador, grafica, lista) --
