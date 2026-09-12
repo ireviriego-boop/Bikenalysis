@@ -80,38 +80,65 @@ import weather  # noqa: E402
 sync_lock = threading.Lock()
 
 
-def run_sync_and_rebuild():
-    """Descarga actividades nuevas de Hammerhead y actualiza el dataset de
-    analisis (de forma incremental: solo se re-parsean los .fit nuevos).
-    Pensado para llamarse desde el boton 'Sincronizar' de la web -- por eso
-    convierte cualquier fallo (token caducado, sin internet, etc.) en un
-    resultado con 'ok': False en vez de tirar el hilo de la peticion abajo."""
+def run_sync_and_rebuild(providers=None):
+    """Descarga actividades nuevas de Hammerhead y/o Strava y actualiza el
+    dataset de analisis (de forma incremental: solo se re-parsean los .fit
+    nuevos). Pensado para llamarse desde el boton 'Sincronizar' de la web --
+    por eso convierte cualquier fallo (token caducado, sin internet, etc.) en
+    un resultado con 'ok': False en vez de tirar el hilo de la peticion abajo.
+
+    `providers`: None sincroniza todas las fuentes conectadas (de siempre);
+    una lista (p.ej. ["strava"]) restringe el sync a esas -- pensado para
+    cuando el mismo GPS auto-sube la salida a mas de un sitio (p.ej. un
+    Karoo que sube a Hammerhead y este a su vez reenvia a Strava) y el
+    usuario prefiere traerla de una sola fuente en vez de confiar en la
+    deteccion de duplicados."""
     if not sync_lock.acquire(blocking=False):
         return {"ok": False, "error": "Ya hay una sincronizacion en curso, espera a que termine."}
     try:
         log_lines = []
         new_count = 0
         new_activities = []
+        do_hammerhead = providers is None or "hammerhead" in providers
+        do_strava = providers is None or "strava" in providers
 
-        try:
-            env = hammerhead_sync.load_env()
-            hh_result = hammerhead_sync.cmd_sync(env, log=log_lines.append)
-            new_count += hh_result["new_count"]
-            new_activities += hh_result["new_activities"]
-        except SystemExit as e:
-            return {"ok": False, "error": str(e) or "Fallo autorizando/descargando de Hammerhead.", "log": log_lines}
+        if do_hammerhead:
+            try:
+                env = hammerhead_sync.load_env()
+                hh_result = hammerhead_sync.cmd_sync(env, log=log_lines.append)
+                new_count += hh_result["new_count"]
+                new_activities += hh_result["new_activities"]
+            except SystemExit as e:
+                return {"ok": False, "error": str(e) or "Fallo autorizando/descargando de Hammerhead.", "log": log_lines}
+
+            # hammerhead_sync solo descarga el .fit -- su hora de inicio no
+            # entra en summaries.json hasta que build_dataset.main() lo
+            # parsea (mas abajo). Si eso se dejara para el final, la
+            # deteccion de duplicados de Strava (ver
+            # strava_sync._is_duplicate_start, que compara contra
+            # summaries.json) compararia contra una version desactualizada y
+            # no veria la actividad de Hammerhead recien bajada en este mismo
+            # sync -- exactamente el caso real que colaba duplicados: la
+            # misma salida subida a Hammerhead y Strava a la vez,
+            # sincronizada de un tiron, acababa dos veces (una por fuente).
+            # Por eso se vuelca aqui antes de mirar Strava; build_dataset es
+            # incremental, así que este parseo extra de los .fit nuevos de
+            # Hammerhead no se repite en la llamada final de mas abajo.
+            if hh_result["new_count"]:
+                build_dataset.main(log=log_lines.append)
 
         # Strava es opcional: si no esta configurado en .env todavia o no se
         # ha autorizado (python strava_sync.py auth), se salta sin romper la
         # sincronizacion de Hammerhead -- load_env()/cmd_sync() hacen
         # sys.exit() en ese caso, igual que hammerhead_sync.py.
-        try:
-            strava_env = strava_sync.load_env()
-            strava_result = strava_sync.cmd_sync(strava_env, log=log_lines.append)
-            new_count += strava_result["new_count"]
-            new_activities += strava_result["new_activities"]
-        except SystemExit as e:
-            log_lines.append(f"Strava no sincronizado ({e}) -- omitido.")
+        if do_strava:
+            try:
+                strava_env = strava_sync.load_env()
+                strava_result = strava_sync.cmd_sync(strava_env, log=log_lines.append)
+                new_count += strava_result["new_count"]
+                new_activities += strava_result["new_activities"]
+            except SystemExit as e:
+                log_lines.append(f"Strava no sincronizado ({e}) -- omitido.")
 
         build_result = build_dataset.main(log=log_lines.append)
         baselines.main()
@@ -445,7 +472,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         try:
             if parsed.path == "/api/sync":
-                result = run_sync_and_rebuild()
+                body = self._read_json_body()
+                providers = body.get("providers")  # None = todas las conectadas
+                result = run_sync_and_rebuild(providers)
                 self._send_json(result, 200 if result.get("ok") else 500)
                 return
             if parsed.path == "/api/settings":

@@ -56,6 +56,7 @@
     <div id="ride-stats" class="stats-grid"></div>
     <div id="ride-fatiga-context" class="fatiga-context"></div>
     <div id="ride-weather" class="ride-weather" hidden></div>
+    <div id="ride-reference-note" class="reference-note" hidden></div>
     <div class="detail-grid">
       <div class="map-wrap">
         <div id="ride-map" class="map"></div>
@@ -275,6 +276,19 @@
     <span id="settings-status"></span>
   </section>
 </main>
+
+<!-- ============================= MODAL SINCRONIZAR ============================= -->
+<div id="sync-modal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <h3>Sincronizar desde...</h3>
+    <div id="sync-modal-providers" class="sync-modal-providers"></div>
+    <div id="sync-modal-hint" class="sync-modal-hint" hidden>Selecciona al menos un proveedor.</div>
+    <div class="modal-actions">
+      <button id="sync-modal-cancel" class="link-btn">Cancelar</button>
+      <button id="sync-modal-confirm" class="sync-btn">Sincronizar</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="app.js"></script>
