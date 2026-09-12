@@ -527,16 +527,17 @@ def analyze_custom_range(records, start_distance_m, end_distance_m, baselines, s
             details = []
         elif grade >= climbing_thr or grade <= descending_thr:
             tendencia = "subida" if grade >= climbing_thr else "bajada"
+            umbral = climbing_thr if grade >= climbing_thr else descending_thr
             headline = f"Es una {tendencia} real para ti, pero sin datos suficientes para un diagnóstico"
-            details = [f"Pendiente: {grade:.1f}% (por encima de tu umbral habitual de {tendencia})",
+            details = [f"Pendiente: {grade:.1f}% (tu pendiente media de {tendencia} es {umbral:.1f}%, así que esto sí cuenta como {tendencia})",
                        "Sin suficientes datos de pulso/cadencia/marcha/velocidad en esta selección"]
         elif -0.5 <= grade <= 0.5:
             headline = "Tramo llano -- no aplica un veredicto de atrancado/bien ejecutado"
             details = []
         else:
             tendencia, umbral = ("subida", climbing_thr) if grade > 0 else ("bajada", descending_thr)
-            headline = f"{tendencia.capitalize()} suave, por debajo de tu umbral habitual"
-            details = [f"Pendiente: {grade:.1f}% (tu umbral de {tendencia}: {umbral:.1f}%)"]
+            headline = f"{tendencia.capitalize()} suave para ti"
+            details = [f"Pendiente: {grade:.1f}% (tu pendiente media de {tendencia} es {umbral:.1f}%, así que esto no llega a contar como {tendencia})"]
     episode.update({
         "verdict": verdict,
         "reliability_tier": tier,

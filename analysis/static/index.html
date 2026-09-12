@@ -18,6 +18,7 @@
       <button class="tab-btn" data-view="compare">Comparar</button>
       <button class="tab-btn" data-view="fitness">📈 Forma</button>
       <button class="tab-btn" data-view="settings">Ajustes</button>
+      <button class="tab-btn" data-view="help">❓ Ayuda</button>
     </nav>
   </div>
 </header>
@@ -274,6 +275,119 @@
     </div>
     <button id="settings-save-btn" class="sync-btn">Guardar y recalcular</button>
     <span id="settings-status"></span>
+  </section>
+
+  <!-- ===================== AYUDA ===================== -->
+  <section id="view-help" class="view help-view">
+    <h2>Ayuda</h2>
+
+    <h3>Sincronizar</h3>
+    <p class="settings-intro">
+      Descarga solo las actividades nuevas desde la última vez -- no vuelve
+      a traer lo que ya tienes. Si hay más de un proveedor conectado
+      (Hammerhead, Strava), al pulsar el botón puedes elegir desde cuál
+      sincronizar en ese momento.
+    </p>
+    <p class="settings-intro">
+      Si la misma salida se sube automáticamente a más de un sitio (p. ej.
+      un Karoo que reenvía a Strava), la app detecta que es la misma
+      actividad por su hora de inicio y descarta la copia duplicada -- se
+      queda con la de Hammerhead cuando existe, porque suele traer más
+      datos (marchas, cadencia). El equipo (bici/zapatillas) usado, en
+      cambio, solo lo sabe Strava: si esa copia se descarta igualmente se
+      rescata ese dato y se guarda en la actividad que se conserva.
+    </p>
+
+    <h3>Tramos interesantes</h3>
+    <p class="settings-intro">
+      Cada actividad se trocea en tramos según rachas de pendiente
+      sostenida y cambios de piñón. Cada tramo en subida o bajada de
+      verdad (los llanos no tienen veredicto) se compara contra tu propio
+      historial para decidir si vas <strong>atrancado</strong> (marcha o
+      esfuerzo poco apropiados para esa pendiente), <strong>bien
+      ejecutado</strong>, o si es <strong>fatiga</strong> (misma potencia
+      de siempre pero el pulso disparado -- solo en subidas con datos de
+      potencia). Los valores "habituales" con los que se compara salen
+      siempre de tu propio historial (percentiles personales), nunca de un
+      valor genérico.
+    </p>
+    <p class="settings-intro">
+      <strong>Pendiente media de subida/bajada</strong>: para decidir si
+      una pendiente cuenta como "subida de verdad" (y por tanto entra en
+      este análisis) se usa la mediana de todas las pendientes positivas de
+      tu historial para ese deporte. Como se recalcula con tus propias
+      salidas, cambia según el terreno que sueles pisar -- más baja si
+      sales por zonas llanas, más alta si vives en la montaña. Lo mismo en
+      espejo para las bajadas.
+    </p>
+
+    <h4>Tiers de fiabilidad</h4>
+    <p class="settings-intro">
+      Cada tramo se clasifica con la mejor combinación de señales
+      disponible para él -- cuantos más sensores entraban en juego, más
+      fiable el veredicto (tier 1 el más fiable, tier 5 el que menos):
+    </p>
+    <ol class="help-list">
+      <li><strong>Tier 1 -- potencia</strong> (+ el resto si lo hay). De
+        momento no hay datos reales de potencia en bici.</li>
+      <li><strong>Tier 2 -- piñón + cadencia + pulso + pendiente.</strong>
+        Todos los datos disponibles.</li>
+      <li><strong>Tier 3 -- piñón O cadencia</strong> (uno de los dos)
+        <strong>+ pulso + pendiente.</strong></li>
+      <li><strong>Tier 4 -- solo pulso + pendiente</strong> (sin marcha ni
+        cadencia).</li>
+      <li><strong>Tier 5 -- solo GPS + velocidad + pendiente</strong> (ni
+        pulso siquiera) -- última red de seguridad para no dejar el tramo
+        sin ningún veredicto.</li>
+    </ol>
+
+    <h3>Referencia externa</h3>
+    <p class="settings-intro">
+      En el detalle de una actividad de running o ciclismo, y en el panel
+      de cada tramo, aparece en cursiva una comparación contra una persona
+      "media" de tu misma altura -- no contra tu propio historial (eso ya
+      lo hacen los "tu habitual" de los tramos). Son estimaciones basadas
+      en proporciones antropométricas y objetivos de técnica citados
+      habitualmente, no una medición tuya real. En running: a partir de tu
+      altura se estima tu longitud de pierna, y con el ritmo real del
+      tramo se calcula una cadencia de referencia (para comparar
+      directamente con tu cadencia real). En ciclismo: la cadencia de
+      pedaleo eficiente habitual y, si tienes guardada tu longitud de
+      pierna, una altura de sillín orientativa (fórmula LeMond).
+    </p>
+
+    <h3>Forma (Fitness / Fatiga / Forma)</h3>
+    <p class="settings-intro">
+      Basado en el TRIMP (carga de entrenamiento según tiempo e intensidad
+      de pulso). <strong>Fitness</strong> es tu carga de fondo acumulada de
+      las últimas ~6 semanas: sube con el entrenamiento constante, baja
+      despacio si paras. <strong>Fatiga</strong> es la carga de los
+      últimos ~7 días: sube y baja rápido. <strong>Forma</strong> =
+      Fitness − Fatiga: positiva cuando vienes fresco (llevas menos carga
+      reciente de la que tu Fitness puede absorber), negativa cuando
+      vienes cansado. Hace falta tu pulso en reposo (Ajustes → Perfil
+      físico) para calcularlo.
+    </p>
+
+    <h3>Comparar actividades</h3>
+    <p class="settings-intro">
+      Compara dos actividades tramo a tramo por los puntos de la ruta que
+      coinciden entre ambas (aunque sean de deportes o fechas distintas)
+      -- "Tramo 1", "Tramo 2"... son esas coincidencias de recorrido, no
+      los mismos "tramos interesantes" del análisis de subidas/bajadas.
+    </p>
+
+    <h3>Ajustes del motor de tramos</h3>
+    <p class="settings-intro">
+      <strong>Divergencia máxima de pendiente</strong>: cuánto puede
+      alejarse la pendiente de un punto nuevo de la media del tramo actual
+      antes de cortarlo y empezar uno nuevo. <strong>Distancia máxima de
+      un tramo</strong>: tope de seguridad para que un tramo no crezca
+      indefinidamente. <strong>Ventana del baseline adaptativo</strong>:
+      los percentiles personales se calculan sobre tus salidas de los
+      últimos N días (no todo el histórico), para reflejar tu forma
+      actual.
+    </p>
   </section>
 </main>
 
