@@ -422,6 +422,13 @@ DUPLICATE_START_TOLERANCE_S = 120
 
 
 def _known_start_times():
+    """Lista de (start_ts, activity_id) de todo lo ya conocido -- se guarda
+    el activity_id (no solo el instante) para poder, si una actividad de
+    Strava resulta ser duplicada, saber A CUAL de las ya guardadas pertenece
+    el equipo (ver _fetch_gear_name/_patch_gear_name mas abajo: Hammerhead
+    nunca expone que bici/zapatillas se uso, ver cabecera del fichero -- ese
+    dato solo llega si la misma salida tambien esta en Strava, aunque se
+    descarte como fila propia por ser duplicada)."""
     path = DATA_DIR / "summaries.json"
     if not path.exists():
         return []
@@ -430,11 +437,57 @@ def _known_start_times():
             d = json.load(f)
     except Exception:
         return []
-    return [s["start_ts"] for s in d.get("summaries", []) if s.get("start_ts") is not None]
+    return [(s["start_ts"], s["activity_id"]) for s in d.get("summaries", [])
+            if s.get("start_ts") is not None and s.get("activity_id")]
 
 
-def _is_duplicate_start(start_epoch, known_starts):
-    return any(abs(ts - start_epoch) <= DUPLICATE_START_TOLERANCE_S for ts in known_starts)
+def _find_duplicate_activity_id(start_epoch, known_starts):
+    for ts, aid in known_starts:
+        if abs(ts - start_epoch) <= DUPLICATE_START_TOLERANCE_S:
+            return aid
+    return None
+
+
+def _fetch_gear_name(strava_activity_id, access_token):
+    """Nombre/apodo de la bici o zapatillas asignadas a esta actividad en
+    Strava (p.ej. "El Avión") -- unica fuente que lo expone; ni la API ni el
+    FIT de Hammerhead llevan este dato (verificado con datos reales). Hace
+    falta el endpoint de detalle (no el listado ni streams), que trae el
+    objeto 'gear' embebido. None si no hay equipo asignado o falla la
+    peticion -- nunca corta la sincronizacion por esto, es solo informativo."""
+    detail = get_json_optional(f"{API_BASE}/activities/{strava_activity_id}", access_token)
+    if not detail:
+        return None
+    gear = detail.get("gear")
+    if not gear:
+        return None
+    return gear.get("nickname") or gear.get("name")
+
+
+def _patch_gear_name(activity_id, gear_name):
+    """Añade gear_name a una entrada YA guardada en summaries.json -- para el
+    caso de una actividad de Strava detectada como duplicada de otra fuente
+    (normalmente Hammerhead): no se vuelve a escribir como fila propia, pero
+    el equipo que Strava sí conoce merece guardarse en la fila que se
+    conserva. No pisa un gear_name que ya hubiera (p.ej. de un patch
+    anterior)."""
+    path = DATA_DIR / "summaries.json"
+    if not gear_name or not path.exists():
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            d = json.load(f)
+    except Exception:
+        return
+    changed = False
+    for s in d.get("summaries", []):
+        if s.get("activity_id") == activity_id and not s.get("gear_name"):
+            s["gear_name"] = gear_name
+            changed = True
+            break
+    if changed:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(d, f, indent=2, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------- sync ----
@@ -478,11 +531,18 @@ def cmd_sync(env, log=print):
             sport = _sport_from_type(item.get("type"))
             sport_detail = _sport_detail_from_type(item.get("type"), item.get("sport_type"))
 
-            if _is_duplicate_start(start_epoch, known_starts):
+            dup_aid = _find_duplicate_activity_id(start_epoch, known_starts)
+            if dup_aid:
                 log(f"  (\"{item.get('name', activity_id)}\" parece la misma salida que ya "
                     "tienes de otra fuente -- misma hora de inicio, se salta)")
                 skipped_duplicate += 1
                 downloaded.add(activity_id)
+                # Aunque no se guarda como fila propia, Strava es la unica
+                # fuente que sabe que bici/zapatillas se uso (ver cabecera) --
+                # se rescata ese dato para la fila que SI se conserva.
+                gear_name = _fetch_gear_name(item["id"], access_token)
+                if gear_name:
+                    _patch_gear_name(dup_aid, gear_name)
                 continue
 
             log(f"Descargando {item.get('name', activity_id)} ({item['start_date']})...")
@@ -501,9 +561,12 @@ def cmd_sync(env, log=print):
                 continue
 
             summ = _write_activity(activity_id, sport, sport_detail, records)
+            gear_name = _fetch_gear_name(item["id"], access_token)
+            if gear_name:
+                summ["gear_name"] = gear_name
             new_summaries.append(summ)
             downloaded.add(activity_id)
-            known_starts.append(start_epoch)  # para detectar duplicados entre si dentro de este mismo sync
+            known_starts.append((start_epoch, activity_id))  # para detectar duplicados entre si dentro de este mismo sync
             new_count += 1
             new_activities.append({
                 "activity_id": activity_id,

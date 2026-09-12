@@ -33,6 +33,70 @@ function coveredMetrics(details) {
   return covered;
 }
 
+// --------------------------------------------------- referencia externa ----
+// Comparacion contra una persona "media" de tu misma altura, no contra tu
+// propio historial (eso ya lo hacen los "tu habitual" de los tramos) -- para
+// tener un punto de referencia externo, pedido explicitamente por el
+// usuario. Son estimaciones basadas en proporciones antropometricas y
+// objetivos de tecnica citados habitualmente (no una medicion tuya real);
+// se explicita en el propio texto para no dar una falsa sensacion de
+// precision clinica. El peso no entra en estas formulas -- ninguna de estas
+// cifras (longitud de pierna, cadencia a un ritmo dado) depende del peso en
+// la literatura de referencia, solo de la altura y del ritmo real del tramo.
+//
+// El sentido del calculo importa: se parte de la fisonomia (altura -> pierna
+// -> zancada tipica para esa pierna) y de las circunstancias reales de este
+// tramo (su velocidad) para llegar a una CADENCIA de referencia -- no al
+// reves (asumir una cadencia "ideal" fija y de ahi derivar una zancada). La
+// cadencia es la cifra que ya se compara en todos lados (tu habitual, la del
+// propio tramo...), asi que la referencia externa tiene que salir en la
+// misma unidad para poder mirarlas una al lado de la otra.
+const REF_LEG_TO_HEIGHT_RATIO = 0.485; // longitud de pierna tipica ~48.5% de la altura
+const REF_STEP_TO_LEG_RATIO = [0.95, 1.05]; // zancada tipica en running, como proporcion de la pierna
+const REF_CYCLING_CADENCE_RPM = [85, 95]; // rango habitual recomendado para pedaleo eficiente en carretera
+const REF_LEMOND_SADDLE_RATIO = 0.883; // formula LeMond: altura de sillin orientativa = entrepierna x 0.883
+
+function refLegLengthCm(heightCm) {
+  return heightCm ? heightCm * REF_LEG_TO_HEIGHT_RATIO : null;
+}
+
+// Cadencia de referencia para ALGUIEN CON ESA PIERNA corriendo a la
+// velocidad real de este tramo/actividad -- cadencia = velocidad / zancada,
+// con la zancada estimada como proporcion de la pierna (no fija), asi que
+// cambia tanto con la fisonomia como con el ritmo de la circunstancia
+// concreta. Devuelve [cadencia con zancada larga, cadencia con zancada
+// corta] = [mas baja, mas alta].
+function refCadenceRangeSpm(legLengthCm, speedKmh) {
+  if (!legLengthCm || !speedKmh) return null;
+  const speedMs = speedKmh / 3.6;
+  const legM = legLengthCm / 100;
+  const [stepLo, stepHi] = REF_STEP_TO_LEG_RATIO.map(r => r * legM);
+  return [speedMs / stepHi * 60, speedMs / stepLo * 60];
+}
+
+function runningReferenceText(heightCm, speedKmh) {
+  if (!heightCm) return null;
+  const legRef = refLegLengthCm(heightCm);
+  const cadence = refCadenceRangeSpm(legRef, speedKmh);
+  let text = `Referencia externa (para una persona de tu altura, ${Math.round(heightCm)} cm, no tu historial): `
+    + `longitud de pierna media ~${num(legRef, 0)} cm`;
+  if (cadence) {
+    text += `; con esa fisonomía, a este ritmo la cadencia de referencia rondaría ${num(cadence[0], 0)}-${num(cadence[1], 0)} zpm`;
+  }
+  text += '.';
+  return text;
+}
+
+function cyclingReferenceText(legLengthCm) {
+  let text = `Referencia externa: cadencia de pedaleo eficiente habitual ~${REF_CYCLING_CADENCE_RPM[0]}-${REF_CYCLING_CADENCE_RPM[1]} rpm (no depende mucho de la altura)`;
+  if (legLengthCm) {
+    const saddle = legLengthCm * REF_LEMOND_SADDLE_RATIO;
+    text += `; con tu longitud de pierna, una altura de sillín orientativa (fórmula LeMond) sería de ~${num(saddle, 0)} cm`;
+  }
+  text += '.';
+  return text;
+}
+
 function fmtDate(ts) {
   if (ts == null) return '-';
   const d = new Date(ts * 1000);
@@ -214,6 +278,8 @@ function renderRideDetail(data) {
   stats.innerHTML = '';
   const sport = summary.sport || 'cycling';
   const cards = [
+    ['Tipo', summary.sport_detail || '-'],
+    ['Equipo', summary.gear_name || '-'],
     ['Distancia', num(summary.distance_km, 1) + ' km'],
     ['Duración', fmtDuration(summary.duration_s)],
     [sport === 'running' ? 'Ritmo medio' : 'Vel. media', fmtSpeed(summary.avg_speed_kmh, sport)],
@@ -248,6 +314,17 @@ function renderRideDetail(data) {
       el('div', { class: 'label' }, [label]),
       el('div', { class: 'value' }, [String(value)]),
     ]));
+  }
+
+  const referenceNote = document.getElementById('ride-reference-note');
+  const refText = sport === 'running'
+    ? runningReferenceText(PROFILE.height_cm, summary.avg_speed_kmh)
+    : (sport === 'cycling' ? cyclingReferenceText(PROFILE.leg_length_cm) : null);
+  if (refText) {
+    referenceNote.hidden = false;
+    referenceNote.textContent = refText;
+  } else {
+    referenceNote.hidden = true;
   }
 
   const fatigaBox = document.getElementById('ride-fatiga-context');
@@ -514,6 +591,12 @@ function renderRideChart(data, focusEpisode) {
     if (!focusCovered.has('power') && focusEpisode.avg_power) statParts.push(`${Math.round(focusEpisode.avg_power)} W`);
     if (!focusCovered.has('gear') && focusEpisode.avg_rear_teeth) statParts.push(`piñón ~${Math.round(focusEpisode.avg_rear_teeth)}T`);
     focusLabel.appendChild(el('div', { class: 'focus-stats' }, [statParts.join(' · ')]));
+    const focusRefText = data.sport === 'running'
+      ? runningReferenceText(PROFILE.height_cm, focusEpisode.avg_speed_kmh)
+      : (data.sport === 'cycling' ? cyclingReferenceText(PROFILE.leg_length_cm) : null);
+    if (focusRefText) {
+      focusLabel.appendChild(el('div', { class: 'reference-note focus-reference' }, [focusRefText]));
+    }
     document.getElementById('tramo-history').hidden = false;
     loadTramoHistory(data.activity_id, focusEpisode, data.sport);
   } else {
@@ -965,13 +1048,24 @@ function renderCompare(cmp, trackA, trackB) {
 
 const syncBtn = document.getElementById('sync-btn');
 const syncStatus = document.getElementById('sync-status');
+const syncModal = document.getElementById('sync-modal');
+const syncModalProviders = document.getElementById('sync-modal-providers');
+const syncModalHint = document.getElementById('sync-modal-hint');
+const syncModalCancel = document.getElementById('sync-modal-cancel');
+const syncModalConfirm = document.getElementById('sync-modal-confirm');
 
-syncBtn.addEventListener('click', async () => {
+async function performSync(providers) {
   syncBtn.disabled = true;
   syncStatus.className = '';
-  syncStatus.textContent = 'Sincronizando con Hammerhead...';
+  syncStatus.textContent = providers && providers.length
+    ? `Sincronizando con ${providers.map(p => CONNECTION_LABELS[p] || p).join(' y ')}...`
+    : 'Sincronizando...';
   try {
-    const res = await fetch('/api/sync', { method: 'POST' });
+    const res = await fetch('/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ providers }),
+    });
     const data = await res.json();
     if (!data.ok) {
       syncStatus.className = 'error';
@@ -989,6 +1083,50 @@ syncBtn.addEventListener('click', async () => {
   } finally {
     syncBtn.disabled = false;
   }
+}
+
+function closeSyncModal() {
+  syncModal.hidden = true;
+  syncModalHint.hidden = true;
+}
+
+// Si solo hay una fuente conectada (o ninguna) no hay nada que elegir --
+// se sincroniza directo, sin molestar con un modal vacio de sentido.
+syncBtn.addEventListener('click', async () => {
+  let statuses;
+  try {
+    const res = await fetch('/api/connections');
+    statuses = await res.json();
+  } catch (e) {
+    statuses = {};
+  }
+  const connected = Object.entries(CONNECTION_LABELS).filter(([name]) => statuses[name] && statuses[name].connected);
+  if (connected.length <= 1) {
+    performSync(null);
+    return;
+  }
+  syncModalProviders.innerHTML = '';
+  for (const [name, label] of connected) {
+    const checkbox = el('input', { type: 'checkbox', 'data-provider': name });
+    checkbox.checked = true;
+    syncModalProviders.appendChild(el('label', {}, [checkbox, label]));
+  }
+  syncModalHint.hidden = true;
+  syncModal.hidden = false;
+});
+
+syncModalCancel.addEventListener('click', closeSyncModal);
+syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSyncModal(); });
+
+syncModalConfirm.addEventListener('click', () => {
+  const checked = [...syncModalProviders.querySelectorAll('input[type="checkbox"]')]
+    .filter(c => c.checked).map(c => c.dataset.provider);
+  if (checked.length === 0) {
+    syncModalHint.hidden = false;
+    return;
+  }
+  closeSyncModal();
+  performSync(checked);
 });
 
 // ----------------------------------------------------------------- ajustes -
